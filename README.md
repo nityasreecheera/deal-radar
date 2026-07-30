@@ -261,7 +261,60 @@ prompt.
 
 ## Status
 
-Early. This README is the design, written before most of the code, deliberately.
+The pipeline runs end to end against live EDGAR. A real digest from a two-day
+window:
+
+```
+Deal Radar · 2 new · Healthcare AI and clinical software · 2026-07-29
+
+1. Qualified Health PBC · $25M · San Carlos, CA
+   ✓ An enterprise AI platform for health systems is clinical software
+     applying machine learning to healthcare workflows.
+
+2. ImmuNovus, Inc. · $5M · Denton, NE
+   ~ Digital twin technologies could be computational drug discovery software
+     (in scope) or primarily therapeutic development (out of scope), but the
+     evidence doesn't specify whether the platform or a molecule is the asset.
+
+Skipped 7 filings — already seen or filtered out.
+Judged 8 as not a fit.
+```
+
+108 tests, none of which touch the network.
+
+### What real filings changed
+
+Four things were wrong in the design above, and only real data showed it.
+
+**The healthcare industry filter excluded healthcare software.** Filtering on the
+SEC's Health Care groups looked free and correct. Ambience Healthcare, Viz.ai and
+Nabla all filed under *Other Technology*. The Health Care groups turned out to
+contain surgical robotics, neuromodulation hardware, a prescription discount
+card, a caregiver service, cell-factor therapeutics, and a house in Wayzata,
+Minnesota.
+
+**A $39 offering exists.** Hence a floor.
+
+**But rejecting filings with no disclosed amount was worse.** Form D permits
+indefinite offerings, and that rule silently dropped three real companies in a
+single ten-day window. Absence of an amount is not evidence of a nominal raise,
+and for a radar a missed company is the one failure that cannot be tolerated.
+
+**An `ElementTree` element with no children is falsey**, so `find_element(...) or
+fallback` silently takes the fallback even on success. Present twice, passing on
+the sample filing by luck.
+
+### Still to do
+
+- Deliver the digest to Slack on a schedule
+- The web reading surface, and the read-only chat over saved research
+- Chip-sector market map
+
+**And the thing that decides whether ranking is real or decorative:** the thesis
+is still a placeholder. Fit criteria live in `config/thesis.yaml`, currently a
+reasonable guess. What belongs there is a real mandate — stage, geography, cheque
+size, and what kills a company in thirty seconds. That comes from talking to
+investors, not from writing more code.
 
 Building on [investment-research-copilot](https://github.com/nityasreecheera/investment-research-copilot),
 which already contributes the parts that matter here: deduplication by canonical
