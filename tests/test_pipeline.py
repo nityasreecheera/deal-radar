@@ -1,0 +1,298 @@
+from contextlib import closing
+from datetime import date
+from pathlib import Path
+
+import pytest
+
+from src.enrich import Enrichment
+from src.judge import JudgementError
+from src.models import Candidate, FormDFiling
+from src.pipeline import default_window, run_radar
+from src.seen import connect, count_seen, mark_seen
+from src.thesis import Thesis
+
+
+def filing(name: str, amount: int | None = 4_000_000, **overrides) -> FormDFiling:
+    data = {
+        "accession": f"acc-{name}",
+        "cik": "1",
+        "company_name": name,
+        "filed_date": "2026-07-28",
+        "industry_group": "Other Health Care",
+        "total_offering_amount": amount,
+    }
+    data.update(overrides)
+
+    return FormDFiling(**data)
+
+
+def thesis() -> Thesis:
+    return Thesis.model_validate(
+        {
+            "name": "Healthcare software",
+            "description": "Software for clinical workflows.",
+            "include": ["clinical software"],
+            "filters": {"min_offering_amount": 500_000},
+        }
+    )
+
+
+@pytest.fixture
+def db(tmp_path: Path):
+    with closing(connect(tmp_path / "radar.sqlite")) as connection:
+        yield connection
+
+
+def fetcher(filings: list[FormDFiling], problems: list[str] | None = None):
+    def fetch(start: str, end: str):
+        return filings, list(problems or [])
+
+    return fetch
+
+
+def verdict_judge(verdict: str = "fits", reason: str = "Clinical software."):
+    def judge(f: FormDFiling, e: Enrichment, t: Thesis) -> Candidate:
+        return Candidate(filing=f, verdict=verdict, reason=reason)
+
+    return judge
+
+
+def no_enrichment(f: FormDFiling) -> Enrichment:
+    return Enrichment()
+
+
+def test_default_window_covers_more_than_one_day() -> None:
+    # A one-day window run on a Monday would miss the weekend's filings.
+    start, end = default_window(days=3, today=date(2026, 7, 29))
+
+    assert start == "2026-07-26"
+    assert end == "2026-07-29"
+
+
+def test_a_run_produces_candidates(db) -> None:
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+    )
+
+    assert run.fetched == 1
+    assert len(run.candidates) == 1
+    assert len(run.interesting) == 1
+
+
+def test_filtered_filings_are_reported_with_reasons(db) -> None:
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher(
+            [filing("Acme Health, Inc."), filing("Tiny Co", amount=39)]
+        ),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+    )
+
+    assert len(run.candidates) == 1
+    assert [d.company_name for d in run.filtered_out] == ["Tiny Co"]
+    assert "below" in run.filtered_out[0].reason
+
+
+def test_a_known_company_is_not_surfaced_again(db) -> None:
+    mark_seen(db, "Acme Health, Inc.", source="form_d")
+
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+    )
+
+    assert run.candidates == []
+    assert run.already_seen == 1
+
+
+def test_everything_judged_is_marked_including_a_rejection(db) -> None:
+    # A no_fit company must be remembered, or it returns in every future digest.
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Dental Group, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge("no_fit", "A dental practice."),
+    )
+
+    assert run.interesting == []
+    assert count_seen(db) == 1
+
+
+def test_a_dry_run_marks_nothing(db) -> None:
+    # Marking is what makes a company old; doing it in a rehearsal would hide
+    # the company from the next real digest.
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+        mark=False,
+    )
+
+    assert len(run.candidates) == 1
+    assert count_seen(db) == 0
+
+
+def test_a_failed_judgement_is_not_marked_as_seen(db) -> None:
+    # Tomorrow's run should get another attempt rather than losing the company.
+    def broken_judge(f, e, t):
+        raise JudgementError("model returned nonsense")
+
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=no_enrichment,
+        judge=broken_judge,
+    )
+
+    assert run.candidates == []
+    assert count_seen(db) == 0
+    assert any("judgement failed" in problem for problem in run.problems)
+
+
+def test_a_failed_enrichment_still_gets_judged(db) -> None:
+    def broken_enrich(f):
+        raise RuntimeError("search backend down")
+
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=broken_enrich,
+        judge=verdict_judge("maybe", "No information available."),
+    )
+
+    assert len(run.candidates) == 1
+    assert any("enrichment failed" in problem for problem in run.problems)
+
+
+def test_interesting_puts_fits_before_maybe_and_drops_no_fit(db) -> None:
+    def mixed_judge(f, e, t):
+        table = {
+            "Big Maybe": ("maybe", "Unclear."),
+            "Small Fit": ("fits", "Clinical software."),
+            "Rejected": ("no_fit", "A clinic."),
+        }
+        verdict, reason = table[f.company_name]
+
+        return Candidate(filing=f, verdict=verdict, reason=reason)
+
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher(
+            [
+                filing("Big Maybe", amount=50_000_000),
+                filing("Small Fit", amount=1_000_000),
+                filing("Rejected", amount=9_000_000),
+            ]
+        ),
+        enrich=no_enrichment,
+        judge=mixed_judge,
+    )
+
+    names = [c.filing.company_name for c in run.interesting]
+
+    # A fit beats a maybe regardless of how much larger the maybe's raise is.
+    assert names == ["Small Fit", "Big Maybe"]
+
+
+def test_larger_raises_sort_first_within_one_verdict(db) -> None:
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher(
+            [filing("Smaller", amount=1_000_000), filing("Bigger", amount=9_000_000)]
+        ),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+    )
+
+    assert [c.filing.company_name for c in run.interesting] == [
+        "Bigger",
+        "Smaller",
+    ]
+
+
+def test_limit_caps_how_many_are_judged(db) -> None:
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing(f"Co {n}") for n in range(10)]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+        limit=3,
+    )
+
+    assert len(run.candidates) == 3
+
+
+def test_skipped_count_combines_both_kinds_of_skip(db) -> None:
+    mark_seen(db, "Known Co", source="form_d")
+
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher(
+            [
+                filing("Acme Health, Inc."),
+                filing("Known Co"),
+                filing("Tiny Co", amount=39),
+            ]
+        ),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+    )
+
+    # One already seen, one filtered out.
+    assert run.already_seen == 1
+    assert len(run.filtered_out) == 1
+    assert run.skipped_count == 2
+
+
+def test_fetch_problems_are_carried_through(db) -> None:
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([], problems=["search 'Biotechnology': timeout"]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+    )
+
+    assert run.problems == ["search 'Biotechnology': timeout"]
