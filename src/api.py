@@ -8,6 +8,9 @@ the radar produced.
 
 from __future__ import annotations
 
+import os
+import time
+from collections import deque
 from contextlib import closing
 from pathlib import Path
 
@@ -100,6 +103,36 @@ class Question(BaseModel):
 class ErrorBody(BaseModel):
     ok: bool = False
     errors: list[str] = Field(default_factory=list)
+
+
+# Every chat request costs money, and this can be published behind nothing more
+# than a shared password. A cap turns a runaway — a stuck loop, a shared link, a
+# bored visitor — into a refusal rather than a bill.
+#
+# Deliberately crude: in-memory, per-process, not per-user. It resets on restart
+# and does not survive more than one worker. That is honest for a single-process
+# deployment and should be replaced before it is relied on for anything else.
+CHAT_LIMIT_PER_HOUR = int(os.getenv("CHAT_LIMIT_PER_HOUR", "60"))
+
+_chat_times: deque[float] = deque()
+
+
+def chat_allowance() -> tuple[bool, int]:
+    """Whether another chat request is allowed, and how many remain."""
+    now = time.monotonic()
+    cutoff = now - 3600
+
+    while _chat_times and _chat_times[0] < cutoff:
+        _chat_times.popleft()
+
+    remaining = CHAT_LIMIT_PER_HOUR - len(_chat_times)
+
+    if remaining <= 0:
+        return False, 0
+
+    _chat_times.append(now)
+
+    return True, remaining - 1
 
 
 def digest_dates() -> list[str]:
@@ -279,7 +312,11 @@ def get_digest(date: str) -> DigestBody:
 @app.post(
     "/api/chat",
     response_model=ChatAnswer,
-    responses={400: {"model": ErrorBody}, 503: {"model": ErrorBody}},
+    responses={
+        400: {"model": ErrorBody},
+        429: {"model": ErrorBody},
+        503: {"model": ErrorBody},
+    },
 )
 def ask(question: Question) -> ChatAnswer:
     """
@@ -288,6 +325,20 @@ def ask(question: Question) -> ChatAnswer:
     No tools are available to the model, so it cannot search, act, or write. The
     context is chosen here in Python; that selection is the boundary.
     """
+    allowed, remaining = chat_allowance()
+
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "ok": False,
+                "errors": [
+                    f"Too many questions — the limit is {CHAT_LIMIT_PER_HOUR} "
+                    "an hour. Try again later."
+                ],
+            },
+        )
+
     with closing(connect()) as connection:
         try:
             return answer_question(

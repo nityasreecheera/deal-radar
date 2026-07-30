@@ -368,3 +368,36 @@ def test_openapi_schema_is_generated() -> None:
     assert "StoredCandidate" in schema["components"]["schemas"]
     assert "/api/candidates" in schema["paths"]
     assert "/api/chat" in schema["paths"]
+
+
+def test_chat_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every question costs money and this can be published behind one shared
+    # password, so a runaway must become a refusal rather than a bill.
+    monkeypatch.setattr(api_module, "CHAT_LIMIT_PER_HOUR", 2)
+    monkeypatch.setattr(api_module, "_chat_times", api_module.deque())
+    monkeypatch.setattr(
+        "src.chat.create_chat_client", lambda: (lambda s, u: "an answer")
+    )
+
+    for _ in range(2):
+        assert client.post("/api/chat", json={"question": "hi?"}).status_code == 200
+
+    third = client.post("/api/chat", json={"question": "hi?"})
+
+    assert third.status_code == 429
+    assert "limit is 2" in third.json()["detail"]["errors"][0]
+
+
+def test_a_refused_question_does_not_consume_allowance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A question rejected by validation never reaches the model, so it should not
+    # count against a budget that exists to cap spending.
+    monkeypatch.setattr(api_module, "CHAT_LIMIT_PER_HOUR", 1)
+    monkeypatch.setattr(api_module, "_chat_times", api_module.deque())
+    monkeypatch.setattr(
+        "src.chat.create_chat_client", lambda: (lambda s, u: "an answer")
+    )
+
+    assert client.post("/api/chat", json={"question": "x" * 501}).status_code == 422
+    assert client.post("/api/chat", json={"question": "hi?"}).status_code == 200
