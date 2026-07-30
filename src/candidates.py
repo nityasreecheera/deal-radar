@@ -11,13 +11,14 @@ each filing is a separate judgement made on separate evidence.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from src.models import Candidate, FitVerdict
+from src.models import Candidate, FitVerdict, RelatedPerson
 
 
 class StoredCandidate(BaseModel):
@@ -45,9 +46,48 @@ class StoredCandidate(BaseModel):
     # Null means nobody has read it yet.
     viewed_at: str | None = None
 
+    # Detail from the filing. Officers and directors are the most useful part:
+    # a director based far from the company is often the investor's board seat.
+    people: list[RelatedPerson] = Field(default_factory=list)
+    amount_sold: int | None = None
+    investor_count: int | None = None
+    jurisdiction: str | None = None
+    entity_type: str | None = None
+    cik: str | None = None
+
+    @field_validator("people", mode="before")
+    @classmethod
+    def parse_people(cls, value: object) -> object:
+        """Accept the JSON string SQLite stores as well as a real list."""
+        if value is None:
+            return []
+
+        if isinstance(value, str):
+            if not value.strip():
+                return []
+
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                # A corrupt blob should cost the people list, not the record.
+                return []
+
+        return value
+
     @property
     def is_unread(self) -> bool:
         return self.viewed_at is None
+
+    @property
+    def filing_url(self) -> str | None:
+        """Link to the filing on EDGAR, when the CIK is known."""
+        if not self.cik:
+            return None
+
+        return (
+            "https://www.sec.gov/Archives/edgar/data/"
+            f"{int(self.cik)}/{self.accession.replace('-', '')}/primary_doc.xml"
+        )
 
 
 def save_candidate(
@@ -72,9 +112,10 @@ def save_candidate(
         INSERT INTO candidate (
             accession, canonical_name, company_name, verdict, reason,
             website, description, offering_amount, filed_date,
-            industry_group, city, state, incorporated, judged_at, theme
+            industry_group, city, state, incorporated, judged_at, theme,
+            people, amount_sold, investor_count, jurisdiction, entity_type, cik
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (accession) DO UPDATE SET
             verdict         = excluded.verdict,
             reason          = excluded.reason,
@@ -83,7 +124,21 @@ def save_candidate(
                 excluded.description, candidate.description
             ),
             judged_at       = excluded.judged_at,
-            theme           = COALESCE(excluded.theme, candidate.theme)
+            theme           = COALESCE(excluded.theme, candidate.theme),
+            people          = COALESCE(excluded.people, candidate.people),
+            amount_sold     = COALESCE(
+                excluded.amount_sold, candidate.amount_sold
+            ),
+            investor_count  = COALESCE(
+                excluded.investor_count, candidate.investor_count
+            ),
+            jurisdiction    = COALESCE(
+                excluded.jurisdiction, candidate.jurisdiction
+            ),
+            entity_type     = COALESCE(
+                excluded.entity_type, candidate.entity_type
+            ),
+            cik             = COALESCE(excluded.cik, candidate.cik)
         """,
         (
             filing.accession,
@@ -101,6 +156,12 @@ def save_candidate(
             filing.year_of_incorporation,
             timestamp,
             theme,
+            json.dumps([p.model_dump(mode="json") for p in filing.related_persons]),
+            filing.total_amount_sold,
+            filing.investor_count,
+            filing.jurisdiction,
+            filing.entity_type,
+            filing.cik,
         ),
     )
     connection.commit()

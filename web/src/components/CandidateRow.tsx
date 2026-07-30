@@ -6,6 +6,7 @@ import {
   VERDICT_LABEL,
   VERDICT_MARK,
   badgeStyle,
+  filingUrl,
   formatAmount,
   formatLocation,
   isUnread,
@@ -23,6 +24,11 @@ export function CandidateRow({
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const unread = isUnread(candidate);
+
+  // Optional in the generated schema because the Pydantic field has a
+  // default_factory, though the API always sends it.
+  const people = candidate.people ?? [];
+  const filing = filingUrl(candidate);
 
   async function markRead() {
     if (!unread || saving) return;
@@ -87,33 +93,117 @@ export function CandidateRow({
       </button>
 
       {expanded && (
-        <div className="mt-3 border-t border-current/10 pt-3 text-sm">
+        <div className="mt-3 space-y-4 border-t border-current/10 pt-3 text-sm">
           <p>{candidate.reason}</p>
 
-          {candidate.description && (
-            <p className="mt-2 text-xs opacity-75">{candidate.description}</p>
+          {candidate.website && (
+            <a
+              href={candidate.website}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block text-sm font-medium underline"
+            >
+              {candidate.website.replace(/^https?:\/\//, "")}
+            </a>
           )}
 
-          <div className="mt-2 flex flex-wrap gap-3 text-xs">
-            {candidate.website && (
+          {candidate.description && (
+            <p className="text-xs opacity-75">{candidate.description}</p>
+          )}
+
+          <Detail label="Officers and directors">
+            {people.length === 0 ? (
+              <span className="opacity-60">None named on the filing.</span>
+            ) : (
+              <ul className="space-y-0.5">
+                {people.map((person) => (
+                  <li key={`${person.first_name}-${person.last_name}`}>
+                    <span className="font-medium">
+                      {[person.first_name, person.last_name]
+                        .filter(Boolean)
+                        .join(" ")}
+                    </span>
+                    {(person.relationships ?? []).length > 0 && (
+                      <span className="opacity-70">
+                        {" — "}
+                        {(person.relationships ?? []).join(", ")}
+                      </span>
+                    )}
+                    {person.city && (
+                      <span className="opacity-60">
+                        {" · "}
+                        {person.city}
+                        {person.state ? `, ${person.state}` : ""}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Detail>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+            <Fact label="Raising" value={formatAmount(candidate.offering_amount)} />
+            <Fact label="Sold so far" value={formatAmount(candidate.amount_sold)} />
+            <Fact
+              label="Investors"
+              value={
+                candidate.investor_count === null ||
+                candidate.investor_count === undefined
+                  ? "unknown"
+                  : String(candidate.investor_count)
+              }
+            />
+            <Fact
+              label="Incorporated"
+              value={candidate.incorporated ? String(candidate.incorporated) : "unknown"}
+            />
+            <Fact label="Entity" value={candidate.entity_type ?? "unknown"} />
+            <Fact label="Registered" value={candidate.jurisdiction ?? "unknown"} />
+          </div>
+
+          <div className="flex flex-wrap gap-3 text-xs opacity-70">
+            {candidate.industry_group && (
+              <span>SEC group: {candidate.industry_group}</span>
+            )}
+
+            {filing && (
               <a
-                href={candidate.website}
+                href={filing}
                 target="_blank"
                 rel="noreferrer"
                 className="underline"
               >
-                {candidate.website.replace(/^https?:\/\//, "")}
+                the SEC filing
               </a>
-            )}
-
-            {candidate.industry_group && <span>{candidate.industry_group}</span>}
-
-            {candidate.incorporated && (
-              <span>incorporated {candidate.incorporated}</span>
             )}
           </div>
         </div>
       )}
     </li>
+  );
+}
+
+function Detail({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <p className="mb-1 text-xs uppercase tracking-wide opacity-60">{label}</p>
+      <div className="text-sm">{children}</div>
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide opacity-60">{label}</p>
+      <p className="text-sm">{value}</p>
+    </div>
   );
 }

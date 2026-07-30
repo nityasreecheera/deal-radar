@@ -20,7 +20,6 @@ from src.normalize import normalize_company_name, normalize_domain
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "radar.sqlite"
 
-     # Tables and indexes are separate because order matters. An index on a
 # Tables and indexes are declared separately because order matters. An index on
 # a column that migration is about to add cannot be created before the column
 # exists, so the sequence is: tables, then missing columns, then indexes. Doing
@@ -67,7 +66,17 @@ CREATE TABLE IF NOT EXISTS candidate (
 
     -- When a human actually read it. Null means unread, which is what the
     -- interface greys out or highlights.
-    viewed_at        TEXT
+    viewed_at        TEXT,
+
+    -- Detail parsed from the filing and previously discarded on save. The
+    -- officers and directors are the most useful part: a director based far
+    -- from the company is often the investor's board seat.
+    people           TEXT,   -- JSON array
+    amount_sold      INTEGER,
+    investor_count   INTEGER,
+    jurisdiction     TEXT,
+    entity_type      TEXT,
+    cik              TEXT    -- lets the interface link to the filing itself
 );
 """
 
@@ -93,6 +102,28 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     # (table, column, DDL to add it)
     ("candidate", "theme", "ALTER TABLE candidate ADD COLUMN theme TEXT"),
     ("candidate", "viewed_at", "ALTER TABLE candidate ADD COLUMN viewed_at TEXT"),
+    ("candidate", "people", "ALTER TABLE candidate ADD COLUMN people TEXT"),
+    (
+        "candidate",
+        "amount_sold",
+        "ALTER TABLE candidate ADD COLUMN amount_sold INTEGER",
+    ),
+    (
+        "candidate",
+        "investor_count",
+        "ALTER TABLE candidate ADD COLUMN investor_count INTEGER",
+    ),
+    (
+        "candidate",
+        "jurisdiction",
+        "ALTER TABLE candidate ADD COLUMN jurisdiction TEXT",
+    ),
+    (
+        "candidate",
+        "entity_type",
+        "ALTER TABLE candidate ADD COLUMN entity_type TEXT",
+    ),
+    ("candidate", "cik", "ALTER TABLE candidate ADD COLUMN cik TEXT"),
 )
 
 

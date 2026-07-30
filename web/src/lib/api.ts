@@ -123,6 +123,22 @@ export function isUnread(candidate: Candidate): boolean {
 }
 
 /**
+ * Link to the filing on EDGAR.
+ *
+ * Built here rather than read from the API for the same reason as isUnread: the
+ * Python model exposes it as a property, and Pydantic does not serialise
+ * properties, so it never reaches the wire.
+ */
+export function filingUrl(candidate: Candidate): string | null {
+  if (!candidate.cik) return null;
+
+  const cik = String(Number(candidate.cik));
+  const accession = candidate.accession.replace(/-/g, "");
+
+  return `https://www.sec.gov/Archives/edgar/data/${cik}/${accession}/primary_doc.xml`;
+}
+
+/**
  * Styling for a row.
  *
  * Read rows are greyed; unread rows carry their verdict's colour. The contrast
