@@ -1,0 +1,54 @@
+# What counts as interesting.
+#
+# This file decides what reaches you, so it is plain text you can open and argue
+# with rather than weights buried in a prompt.
+#
+# PLACEHOLDER. Everything below is a reasonable guess, not a real mandate. The
+# questions that turn it into one:
+#   - What stage do you invest at, and what is the cheque size?
+#   - Which geographies are in and out?
+#   - What kills a company in the first thirty seconds?
+#   - What have you passed on and regretted?
+
+name: Healthcare AI and clinical software
+
+description: >
+  Companies applying software and machine learning to clinical and healthcare
+  workflows. The product is software; healthcare is the domain it operates in.
+
+# The positive definition of the thesis.
+include:
+  - clinical trial recruitment, enrollment, and site selection
+  - clinical documentation, coding, and revenue cycle automation
+  - diagnostics and medical imaging where the product is the algorithm
+  - care coordination and patient triage software
+  - health data infrastructure, interoperability, and EHR tooling
+  - computational drug discovery where the platform is the asset
+
+# Disqualifying. These are the thirty-second kills.
+exclude:
+  - therapeutics and drug development where the asset is a molecule
+  - medical devices and hardware with no meaningful software component
+  - clinical service providers — clinics, practices, staffing, home care
+  - dental, veterinary, cosmetic, and wellness businesses
+  - health insurance carriers and benefits brokers
+  - real-estate or facilities vehicles that happen to be healthcare-adjacent
+
+# Deterministic filters, applied before anything is enriched or judged.
+# Cheap checks first: there is no point paying for a lookup on a filing that a
+# threshold would have removed anyway.
+filters:
+  # A $39 offering is a nominal filing, not a fundraise. Observed in real data.
+  min_offering_amount: 500000
+
+  # An amendment restates a round already reported, so the company is not new.
+  exclude_amendments: true
+
+  # Pooled investment vehicles file Form D constantly and are never operating
+  # companies. Matched as whole words against the entity name.
+  exclude_name_patterns:
+    - fund
+    - ventures
+    - spv
+    - capital partners
+    - holdings llc
