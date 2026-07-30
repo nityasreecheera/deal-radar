@@ -115,13 +115,16 @@ export default function Home() {
   }
 
   async function markAllRead() {
-    await fetch(`/api/viewed${theme ? `?theme=${encodeURIComponent(theme)}` : ""}`, {
-      method: "POST",
-    });
+    await fetch(
+      `/api/viewed${theme ? `?theme=${encodeURIComponent(theme)}` : ""}`,
+      { method: "POST" },
+    );
 
     setCandidates((current) =>
       current.map((item) =>
-        item.viewed_at ? item : { ...item, viewed_at: new Date().toISOString() },
+        item.viewed_at
+          ? item
+          : { ...item, viewed_at: new Date().toISOString() },
       ),
     );
 
@@ -130,87 +133,118 @@ export default function Home() {
 
   if (unreachable) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-16">
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-6">
-          <h2 className="font-semibold text-amber-900">The API is not running</h2>
-          <p className="mt-2 text-sm text-amber-800">Start it on the VM, then reload:</p>
-          <pre className="mt-2 overflow-x-auto rounded bg-amber-900/90 p-3 text-xs text-amber-50">
-            cd ~/deal-radar{"\n"}
-            .venv/bin/uvicorn src.api:app --port 8100
-          </pre>
-        </div>
+      <main className="mx-auto max-w-xl px-8 py-24">
+        <h2 className="font-display text-xl">The API is not running</h2>
+        <p className="mt-3 text-sm text-[var(--color-ink-soft)]">
+          Start it on the VM, then reload.
+        </p>
+        <pre className="tabular mt-4 overflow-x-auto border-l-2 border-[var(--color-rule)] pl-4 text-xs text-[var(--color-ink-faint)]">
+          cd ~/deal-radar{"\n"}
+          .venv/bin/uvicorn src.api:app --port 8100
+        </pre>
       </main>
     );
   }
 
+  const unread = meta?.unread ?? 0;
+
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-slate-200 bg-white px-6 py-4">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-baseline justify-between gap-3">
-          <h1 className="font-semibold tracking-tight">Deal Radar</h1>
+      <header className="border-b border-[var(--color-rule)]">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-baseline justify-between gap-x-8 gap-y-2 px-8 pt-10 pb-6">
+          <h1 className="font-display text-[1.75rem] leading-none tracking-tight">
+            Deal Radar
+          </h1>
 
-          <p className="text-sm text-slate-500">
+          <p className="label">
             {meta ? (
               <>
-                {meta.unread} unread · {meta.companies_known} companies known
-                {meta.thesis_name ? ` · ${meta.thesis_name}` : ""}
+                <span className="tabular text-[var(--color-ink)]">{unread}</span>{" "}
+                unread
+                <span className="mx-2 text-[var(--color-rule)]">/</span>
+                <span className="tabular">{meta.companies_known}</span> known
               </>
             ) : (
-              "loading…"
+              "loading"
             )}
           </p>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-6">
-        <section className="mb-6 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex flex-wrap items-end gap-4">
-            <label className="text-xs">
-              <span className="mb-1 block uppercase tracking-wide text-slate-500">
-                Domain
-              </span>
-              <select
-                value={theme}
-                onChange={(event) => setTheme(event.target.value)}
-                className="rounded border border-slate-300 px-2 py-1 text-sm"
-              >
-                <option value="">All domains</option>
-                {(meta?.themes ?? []).map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-8">
+        <section className="flex flex-wrap items-end gap-x-8 gap-y-4 border-b border-[var(--color-rule)] py-5">
+          <label>
+            <span className="label mb-1 block">Domain</span>
+            <select
+              value={theme}
+              onChange={(event) => setTheme(event.target.value)}
+              className="field pr-6"
+            >
+              <option value="">All</option>
+              {(meta?.themes ?? []).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-            <label className="text-xs">
-              <span className="mb-1 block uppercase tracking-wide text-slate-500">
-                Filed from
-              </span>
-              <input
-                type="date"
-                value={since}
-                min={meta?.earliest_filing ?? undefined}
-                max={meta?.latest_filing ?? undefined}
-                onChange={(event) => setSince(event.target.value)}
-                className="rounded border border-slate-300 px-2 py-1 text-sm"
-              />
-            </label>
+          <label>
+            <span className="label mb-1 block">Filed from</span>
+            <input
+              type="date"
+              value={since}
+              min={meta?.earliest_filing ?? undefined}
+              max={meta?.latest_filing ?? undefined}
+              onChange={(event) => setSince(event.target.value)}
+              className="field tabular"
+            />
+          </label>
 
-            <label className="text-xs">
-              <span className="mb-1 block uppercase tracking-wide text-slate-500">
-                to
-              </span>
-              <input
-                type="date"
-                value={until}
-                min={meta?.earliest_filing ?? undefined}
-                max={meta?.latest_filing ?? undefined}
-                onChange={(event) => setUntil(event.target.value)}
-                className="rounded border border-slate-300 px-2 py-1 text-sm"
-              />
-            </label>
+          <label>
+            <span className="label mb-1 block">Until</span>
+            <input
+              type="date"
+              value={until}
+              min={meta?.earliest_filing ?? undefined}
+              max={meta?.latest_filing ?? undefined}
+              onChange={(event) => setUntil(event.target.value)}
+              className="field tabular"
+            />
+          </label>
 
+          <div className="flex items-baseline gap-4">
+            {VERDICTS.map((verdict) => {
+              const active = verdicts.includes(verdict);
+
+              return (
+                <button
+                  key={verdict}
+                  type="button"
+                  onClick={() => toggleVerdict(verdict)}
+                  className={`pb-0.5 text-[0.6875rem] tracking-[0.08em] uppercase transition-colors ${
+                    active
+                      ? "border-b border-[var(--color-ink)] text-[var(--color-ink)]"
+                      : "border-b border-transparent text-[var(--color-ink-faint)] hover:text-[var(--color-ink-soft)]"
+                  }`}
+                >
+                  {VERDICT_LABEL[verdict]}
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="flex items-center gap-2 text-[0.75rem] text-[var(--color-ink-soft)]">
+            <input
+              type="checkbox"
+              checked={unreadOnly}
+              onChange={(event) => setUnreadOnly(event.target.checked)}
+              className="accent-[var(--color-ink)]"
+            />
+            Unread only
+          </label>
+
+          <div className="ml-auto flex items-baseline gap-5">
             {(since || until) && (
               <button
                 type="button"
@@ -218,75 +252,53 @@ export default function Home() {
                   setSince("");
                   setUntil("");
                 }}
-                className="text-xs text-slate-500 underline"
+                className="text-[0.75rem] text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
               >
                 clear dates
               </button>
             )}
-          </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex flex-wrap gap-2">
-              {VERDICTS.map((verdict) => (
-                <button
-                  key={verdict}
-                  type="button"
-                  onClick={() => toggleVerdict(verdict)}
-                  className={`rounded-full border px-3 py-1 text-xs ${
-                    verdicts.includes(verdict)
-                      ? "border-slate-800 bg-slate-800 text-white"
-                      : "border-slate-300 text-slate-600"
-                  }`}
-                >
-                  {VERDICT_LABEL[verdict]}
-                </button>
-              ))}
-            </div>
-
-            <label className="flex items-center gap-2 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                checked={unreadOnly}
-                onChange={(event) => setUnreadOnly(event.target.checked)}
-              />
-              Unread only
-            </label>
-
-            {(meta?.unread ?? 0) > 0 && (
+            {unread > 0 && (
               <button
                 type="button"
                 onClick={() => void markAllRead()}
-                className="ml-auto text-xs text-slate-500 underline"
+                className="text-[0.75rem] text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
               >
                 mark all read
               </button>
             )}
           </div>
-
-          {meta?.earliest_filing && (
-            <p className="text-xs text-slate-400">
-              Filings on record: {meta.earliest_filing} to {meta.latest_filing}
-            </p>
-          )}
         </section>
 
         {loading ? (
-          <p className="text-sm text-slate-400">Loading…</p>
+          <p className="label py-10">Loading</p>
         ) : candidates.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-500">
+          <p className="py-10 text-sm text-[var(--color-ink-faint)]">
             Nothing matches those filters.
-            {verdicts.length === 0 && " Pick at least one verdict."}
+            {verdicts.length === 0 && " Choose at least one verdict."}
           </p>
         ) : (
-          <ul className="space-y-2">
-            {candidates.map((candidate) => (
-              <CandidateRow
-                key={candidate.accession}
-                candidate={candidate}
-                onRead={handleRead}
-              />
-            ))}
-          </ul>
+          <>
+            <ul className="pb-10">
+              {candidates.map((candidate) => (
+                <CandidateRow
+                  key={candidate.accession}
+                  candidate={candidate}
+                  onRead={handleRead}
+                />
+              ))}
+            </ul>
+
+            <p className="label pb-10">
+              <span className="tabular">{candidates.length}</span> shown
+              {meta?.earliest_filing && (
+                <>
+                  <span className="mx-2 text-[var(--color-rule)]">/</span>
+                  filings on record {meta.earliest_filing} to {meta.latest_filing}
+                </>
+              )}
+            </p>
+          </>
         )}
       </main>
 

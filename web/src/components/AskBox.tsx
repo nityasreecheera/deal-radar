@@ -50,22 +50,24 @@ export function AskBox({ theme }: { theme: string | null }) {
   }
 
   return (
-    <section className="sticky bottom-0 border-t border-slate-200 bg-white/95 px-6 py-4 backdrop-blur">
-      <div className="mx-auto max-w-4xl">
+    <section className="sticky bottom-0 border-t border-[var(--color-rule)] bg-[color-mix(in_srgb,var(--color-paper)_92%,transparent)] backdrop-blur-sm">
+      <div className="mx-auto max-w-3xl px-8 py-5">
         {answer && (
-          <div className="mb-3 rounded-lg bg-slate-100 px-4 py-3 text-sm">
-            <p className="whitespace-pre-wrap">{answer.answer}</p>
-            <p className="mt-2 text-xs text-slate-500">
-              From {answer.considered} recorded judgement
-              {answer.considered === 1 ? "" : "s"}. Nothing else was consulted.
+          <div className="mb-4 border-l-2 border-[var(--color-ink)] pl-4">
+            <p className="font-display text-[0.9375rem] leading-relaxed whitespace-pre-wrap text-[var(--color-ink)]">
+              {answer.answer}
+            </p>
+            <p className="label mt-2">
+              from {answer.considered} recorded judgement
+              {answer.considered === 1 ? "" : "s"}
             </p>
           </div>
         )}
 
         {error && (
-          <div className="mb-3 rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-800">
+          <p className="mb-3 border-l-2 border-[var(--color-maybe)] pl-4 text-sm text-[var(--color-maybe)]">
             {error}
-          </div>
+          </p>
         )}
 
         <form
@@ -73,27 +75,27 @@ export function AskBox({ theme }: { theme: string | null }) {
             event.preventDefault();
             void ask(question);
           }}
-          className="flex gap-2"
+          className="flex items-baseline gap-3"
         >
           <input
             type="text"
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ask about what has already been judged…"
+            placeholder="Ask about what has already been judged"
             maxLength={500}
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="field flex-1 placeholder:text-[var(--color-ink-faint)]"
           />
 
           <button
             type="submit"
             disabled={asking || !question.trim()}
-            className="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:opacity-40"
+            className="shrink-0 border-b border-[var(--color-ink)] pb-0.5 text-[0.6875rem] tracking-[0.08em] uppercase text-[var(--color-ink)] transition-opacity disabled:border-transparent disabled:opacity-30"
           >
-            {asking ? "Asking…" : "Ask"}
+            {asking ? "Asking" : "Ask"}
           </button>
         </form>
 
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
           {EXAMPLES.map((example) => (
             <button
               key={example}
@@ -102,16 +104,16 @@ export function AskBox({ theme }: { theme: string | null }) {
                 setQuestion(example);
                 void ask(example);
               }}
-              className="rounded-full border border-slate-300 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
+              className="text-[0.75rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
             >
               {example}
             </button>
           ))}
         </div>
 
-        <p className="mt-2 text-xs text-slate-400">
-          Answers come only from stored judgements. It cannot search the web or
-          research anything new — ask the agent for that.
+        <p className="mt-3 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
+          Answers draw only on judgements already recorded. This cannot search or
+          research anything new.
         </p>
       </div>
     </section>

@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/*
+ * A restrained palette. This is a research tool read every morning, so the
+ * defaults are warm neutrals and ink rather than saturated colour — the only
+ * strong signal on the page should be which rows are unread.
+ */
+@theme {
+  --color-ink: #14110f;
+  --color-ink-soft: #4a4340;
+  --color-ink-faint: #8a807b;
+  --color-paper: #faf8f5;
+  --color-paper-raised: #ffffff;
+  --color-rule: #e6e0d8;
+
+  --color-fits: #2f6f52;
+  --color-fits-tint: #eef5f0;
+  --color-maybe: #8a6a2f;
+  --color-maybe-tint: #f8f3e9;
+  --color-nofit: #9a9490;
+
+  --font-display: var(--font-newsreader), Georgia, serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+/* Figures should line up down a column like a ledger. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Small-caps labels, used for field names and section headings. */
+.label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+
+/* Inputs are quiet until focused. A filter bar should not compete with the
+   content it filters. */
+.field {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+  color: var(--color-ink);
+  transition: border-color 120ms ease;
+}
+
+.field:hover {
+  border-color: var(--color-ink-faint);
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--color-ink);
+}

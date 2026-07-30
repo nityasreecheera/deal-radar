@@ -1,5 +1,23 @@
 import type { Metadata } from "next";
+import { Inter, Newsreader } from "next/font/google";
+
 import "./globals.css";
+
+// A serif for the wordmark and company names, a sans for everything else. The
+// mix is what stops a dense list of figures reading like a spreadsheet.
+const newsreader = Newsreader({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  style: ["normal", "italic"],
+  variable: "--font-newsreader",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Deal Radar",
@@ -10,10 +28,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
-        {children}
-      </body>
+    <html lang="en" className={`${newsreader.variable} ${inter.variable}`}>
+      <body className="min-h-screen">{children}</body>
     </html>
   );
 }
