@@ -9,7 +9,7 @@ from contextlib import closing
 from pathlib import Path
 
 from src.digest import render_digest, save_digest, send_to_slack
-from src.edgar import fetch_healthcare_filings
+from src.edgar import fetch_filings
 from src.pipeline import default_window, run_radar
 from src.seen import connect, count_seen
 from src.thesis import ThesisError, load_thesis
@@ -30,9 +30,10 @@ def command_run(args: argparse.Namespace) -> int:
         start, end = default_window(days=args.days)
 
     def fetch(start_date: str, end_date: str):
-        return fetch_healthcare_filings(
+        return fetch_filings(
             start_date,
             end_date,
+            industry_groups=thesis.sec_industry_groups,
             max_per_group=args.max_per_group,
         )
 

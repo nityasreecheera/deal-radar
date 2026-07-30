@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.edgar import fetch_healthcare_filings  # noqa: E402
+from src.edgar import fetch_filings  # noqa: E402
 from src.enrich import enrich_filing  # noqa: E402
 from src.judge import judge_filing  # noqa: E402
 from src.seen import connect, filter_unseen  # noqa: E402
@@ -27,7 +27,9 @@ def main() -> int:
 
     thesis = load_thesis()
 
-    filings, problems = fetch_healthcare_filings(start, end, max_per_group=10)
+    filings, problems = fetch_filings(
+        start, end, industry_groups=thesis.sec_industry_groups, max_per_group=10
+    )
     kept, dropped = apply_filters(filings, thesis)
 
     with closing(connect()) as db:

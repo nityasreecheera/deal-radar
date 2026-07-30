@@ -18,7 +18,7 @@ from xml.etree import ElementTree
 
 import httpx
 
-from src.models import HEALTHCARE_INDUSTRY_GROUPS, FormDFiling, RelatedPerson
+from src.models import SEC_HEALTHCARE_GROUPS, FormDFiling, RelatedPerson
 
 
 SEARCH_URL = "https://efts.sec.gov/LATEST/search-index"
@@ -390,15 +390,15 @@ def search_industry(
     return collected[:max_results]
 
 
-def fetch_healthcare_filings(
+def fetch_filings(
     start_date: str,
     end_date: str,
+    industry_groups: list[str] | tuple[str, ...] = SEC_HEALTHCARE_GROUPS,
     fetch: Fetcher | None = None,
-    industry_groups: tuple[str, ...] = HEALTHCARE_INDUSTRY_GROUPS,
     max_per_group: int = 200,
 ) -> tuple[list[FormDFiling], list[str]]:
     """
-    Fetch and parse every healthcare Form D filed in a date range.
+    Fetch and parse every Form D filed in a date range for the given groups.
 
     Returns the filings alongside one message per filing that could not be read,
     so a single malformed document does not lose the whole day's data.
@@ -450,7 +450,7 @@ def fetch_healthcare_filings(
             # The search matched on a phrase inside the document, which can hit
             # a filing whose stated group is something else. Trust the parsed
             # field over the search match.
-            if filing.is_healthcare:
+            if filing.in_groups(industry_groups):
                 filings.append(filing)
 
             time.sleep(REQUEST_DELAY_SECONDS)

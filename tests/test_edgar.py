@@ -6,7 +6,7 @@ import pytest
 from src.edgar import (
     EdgarError,
     build_search_url,
-    fetch_healthcare_filings,
+    fetch_filings,
     filing_xml_url,
     parse_form_d,
     parse_search_results,
@@ -111,7 +111,7 @@ def test_parse_real_filing() -> None:
     assert filing.company_name == "PreventiveMD, Inc."
     assert filing.cik == "0002147093"
     assert filing.industry_group == "Other Health Care"
-    assert filing.is_healthcare is True
+    assert filing.in_groups(['Other Health Care']) is True
     assert filing.entity_type == "Corporation"
     assert filing.jurisdiction == "DELAWARE"
     assert filing.year_of_incorporation == 2026
@@ -172,7 +172,7 @@ def test_parse_survives_an_empty_offering_block() -> None:
 
     assert filing.company_name == "Empty Co"
     assert filing.industry_group == "Unknown"
-    assert filing.is_healthcare is False
+    assert filing.in_groups(['Other Health Care']) is False
     assert filing.total_offering_amount is None
     assert filing.city is None
 
@@ -196,7 +196,8 @@ def test_parse_reads_amounts_when_the_issuer_block_has_no_children() -> None:
 
     assert filing.city == "Boston"
     assert filing.industry_group == "Biotechnology"
-    assert filing.is_healthcare is True
+    assert filing.in_groups(["Biotechnology"]) is True
+    assert filing.in_groups(["Other Health Care"]) is False
     assert filing.total_offering_amount == 500000
     assert filing.total_amount_sold is None
 
@@ -233,7 +234,7 @@ def test_fetch_healthcare_filings_end_to_end_offline() -> None:
 
         return real_filing_xml()
 
-    filings, problems = fetch_healthcare_filings(
+    filings, problems = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,
@@ -256,7 +257,7 @@ def test_fetch_records_a_problem_without_losing_the_batch() -> None:
 
         return "<broken"
 
-    filings, problems = fetch_healthcare_filings(
+    filings, problems = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,
@@ -283,7 +284,7 @@ def test_fetch_drops_a_filing_whose_stated_group_is_not_healthcare() -> None:
 
         return non_healthcare
 
-    filings, problems = fetch_healthcare_filings(
+    filings, problems = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,
@@ -297,7 +298,7 @@ def test_search_reports_invalid_json() -> None:
     def fake_fetch(url: str) -> str:
         return "not json"
 
-    filings, problems = fetch_healthcare_filings(
+    filings, problems = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,

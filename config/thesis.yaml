@@ -12,6 +12,29 @@
 
 name: Healthcare AI and clinical software
 
+# Which SEC industry groups to search. This is a thesis decision, not a
+# technical one, so it lives here.
+#
+# Technology is included because that is where healthcare software actually
+# files. Verified against real filings: Ambience Healthcare ($70M), Viz.ai and
+# Nabla all filed under "Other Technology", not any Health Care group. Searching
+# only Health Care would systematically exclude the exact companies this thesis
+# is looking for — the healthcare groups are dominated by devices, therapeutics,
+# clinical services, and the occasional real-estate LLC.
+#
+# The cost of including Technology is volume: roughly 350 extra filings a month
+# against 150 healthcare ones. Every one gets enriched and judged, which is
+# affordable, and there is no cheaper shortcut — names like "Abridge" and
+# "Nabla" carry no signal at all, so anything relevant has to be looked up.
+sec_industry_groups:
+  - Other Technology
+  - Computers
+  - Other Health Care
+  - Biotechnology
+  - Pharmaceuticals
+  - Hospitals & Physicians
+  - Health Insurance
+
 description: >
   Companies applying software and machine learning to clinical and healthcare
   workflows. The product is software; healthcare is the domain it operates in.

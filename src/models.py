@@ -7,10 +7,14 @@ from pydantic import BaseModel, Field, field_validator
 from src.normalize import normalize_company_name, slugify_company_name
 
 
-# The five industry groups the SEC files under Health Care. Filtering on these
-# is free: the value is a field in the filing, so no lookup is needed to know
-# whether a filing is worth enriching.
-HEALTHCARE_INDUSTRY_GROUPS = (
+# The five industry groups the SEC files under Health Care.
+#
+# A caution learned from real filings: these are NOT where healthcare software
+# lives. Ambience Healthcare, Viz.ai and Nabla all filed under "Other
+# Technology". The healthcare groups are mostly devices, therapeutics, clinical
+# services, and occasionally a real-estate LLC. Which groups to actually search
+# is a thesis decision and lives in config/thesis.yaml.
+SEC_HEALTHCARE_GROUPS = (
     "Biotechnology",
     "Health Insurance",
     "Hospitals & Physicians",
@@ -88,9 +92,15 @@ class FormDFiling(BaseModel):
         """A readable identifier for paths and URLs."""
         return slugify_company_name(self.company_name)
 
-    @property
-    def is_healthcare(self) -> bool:
-        return self.industry_group in HEALTHCARE_INDUSTRY_GROUPS
+    def in_groups(self, groups: list[str] | tuple[str, ...]) -> bool:
+        """
+        Whether the filing's own stated group is one being searched.
+
+        Needed because full-text search matches a phrase anywhere in the
+        document, so a search can return a filing that states a different group.
+        The parsed field is authoritative; the search match is a hint.
+        """
+        return self.industry_group in tuple(groups)
 
     @property
     def is_newly_incorporated(self) -> bool:

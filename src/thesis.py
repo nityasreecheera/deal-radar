@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from src.models import FormDFiling
+from src.models import SEC_HEALTHCARE_GROUPS, FormDFiling
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +43,13 @@ class Thesis(BaseModel):
     include: list[str] = Field(min_length=1)
     exclude: list[str] = Field(default_factory=list)
     filters: ThesisFilters = Field(default_factory=ThesisFilters)
+
+    # Which SEC industry groups to search. A thesis decision rather than a
+    # technical one: healthcare software files under Technology, so a thesis
+    # about healthcare software has to look there.
+    sec_industry_groups: list[str] = Field(
+        default_factory=lambda: list(SEC_HEALTHCARE_GROUPS)
+    )
 
 
 class ThesisError(RuntimeError):
