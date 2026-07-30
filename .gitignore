@@ -1,0 +1,19 @@
+# Secrets
+.env
+.env.local
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+.next/
+
+# Fetched and generated data — the repo is the tool, not the research archive
+data/filings/*.json
+data/seen/*.json
+outputs/*.md
+!**/.gitkeep
