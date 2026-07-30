@@ -294,6 +294,58 @@ def test_fetch_drops_a_filing_whose_stated_group_is_not_healthcare() -> None:
     assert problems == []
 
 
+def test_a_failing_later_page_keeps_the_earlier_results() -> None:
+    # EDGAR returns 500 on deep pagination. Losing a whole industry group to one
+    # bad page would mean losing a day of coverage for that sector.
+    def fake_fetch(url: str) -> str:
+        if url.startswith("https://efts.sec.gov"):
+            if "Other+Health+Care" not in url:
+                return json.dumps({"hits": {"total": {"value": 0}, "hits": []}})
+
+            if "from=" in url:
+                raise EdgarError("EDGAR returned 500")
+
+            # Claim more hits than one page holds, forcing a second request.
+            return json.dumps(search_payload(total=40))
+
+        return real_filing_xml()
+
+    filings, problems = fetch_filings(
+        "2026-07-01",
+        "2026-07-29",
+        industry_groups=("Other Health Care",),
+        fetch=fake_fetch,
+    )
+
+    assert len(filings) == 1
+    assert any("stopped at offset" in problem for problem in problems)
+
+
+def test_a_failing_first_page_loses_only_that_group() -> None:
+    def fake_fetch(url: str) -> str:
+        if "Biotechnology" in url:
+            raise EdgarError("EDGAR returned 500")
+
+        if url.startswith("https://efts.sec.gov"):
+            if "Other+Health+Care" in url:
+                return json.dumps(search_payload())
+
+            return json.dumps({"hits": {"total": {"value": 0}, "hits": []}})
+
+        return real_filing_xml()
+
+    filings, problems = fetch_filings(
+        "2026-07-01",
+        "2026-07-29",
+        industry_groups=("Biotechnology", "Other Health Care"),
+        fetch=fake_fetch,
+    )
+
+    # Biotechnology failed outright; Other Health Care still came through.
+    assert len(filings) == 1
+    assert any("search 'Biotechnology'" in problem for problem in problems)
+
+
 def test_search_reports_invalid_json() -> None:
     def fake_fetch(url: str) -> str:
         return "not json"

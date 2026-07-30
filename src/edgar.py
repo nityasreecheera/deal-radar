@@ -57,7 +57,10 @@ def create_fetcher(user_agent: str | None = None) -> Fetcher:
     client = httpx.Client(headers=headers, timeout=30.0, follow_redirects=True)
 
     def fetch(url: str) -> str:
-        response = client.get(url)
+        try:
+            response = client.get(url)
+        except httpx.HTTPError as exc:
+            raise EdgarError(f"could not reach EDGAR: {exc}") from exc
 
         if response.status_code == 403:
             raise EdgarError(
@@ -65,7 +68,15 @@ def create_fetcher(user_agent: str | None = None) -> Fetcher:
                 "with a contact address."
             )
 
-        response.raise_for_status()
+        # EDGAR's search API returns 500 intermittently, including on deep
+        # pagination. Every transport failure becomes an EdgarError so callers
+        # handle one exception type rather than leaking httpx through the seam.
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise EdgarError(
+                f"EDGAR returned {response.status_code} for {url}"
+            ) from exc
 
         return response.text
 
@@ -364,8 +375,20 @@ def search_industry(
     fetch: Fetcher,
     max_results: int = 200,
 ) -> list[dict[str, str]]:
-    """Page through search results for one industry group."""
+    """
+    Page through search results for one industry group.
+
+    Returns whatever was collected alongside any problems. A failure on a later
+    page keeps the earlier pages rather than discarding the group: EDGAR's search
+    API returns 500 intermittently and specifically on deep pagination, and
+    losing a whole industry group to one bad page would mean losing a day of
+    coverage for that sector.
+
+    A failure on the *first* page is different — there is nothing to salvage, so
+    that raises.
+    """
     collected: list[dict[str, str]] = []
+    problems: list[str] = []
     offset = 0
 
     while offset < max_results:
@@ -373,8 +396,25 @@ def search_industry(
 
         try:
             payload = json.loads(fetch(url))
+        except EdgarError as exc:
+            if offset == 0:
+                raise
+
+            problems.append(
+                f"search '{industry_group}' stopped at offset {offset}: {exc}"
+            )
+            break
         except json.JSONDecodeError as exc:
-            raise EdgarError(f"search returned invalid JSON ({exc})") from exc
+            if offset == 0:
+                raise EdgarError(
+                    f"search returned invalid JSON ({exc})"
+                ) from exc
+
+            problems.append(
+                f"search '{industry_group}' returned invalid JSON at "
+                f"offset {offset}"
+            )
+            break
 
         page = parse_search_results(payload)
         collected.extend(page)
@@ -387,7 +427,7 @@ def search_industry(
 
         time.sleep(REQUEST_DELAY_SECONDS)
 
-    return collected[:max_results]
+    return collected[:max_results], problems
 
 
 def fetch_filings(
@@ -415,14 +455,16 @@ def fetch_filings(
 
     for group in industry_groups:
         try:
-            results = search_industry(
+            results, page_problems = search_industry(
                 group,
                 start_date,
                 end_date,
                 fetcher,
                 max_results=max_per_group,
             )
+            problems.extend(page_problems)
         except EdgarError as exc:
+            # One unreachable industry group must not lose the other six.
             problems.append(f"search '{group}': {exc}")
             continue
 
