@@ -147,6 +147,82 @@ gave that verdict. The reason explains the decision, the summary describes the
 business. When those were one field, the only description available was a raw
 search snippet, which is usually legal boilerplate.
 
+## How it's built
+
+Here's the whole thing, with the important line marked:
+
+```
+CRON, weekdays — nothing has to be running
+  │
+  1. FETCH      SEC EDGAR full-text search → Form D filings
+  │             stdlib XML parsing, no model involved
+  │
+  2. FILTER     thresholds, amendments, investment vehicles
+  │             free, so it runs before anything that costs money
+  │
+  3. DEDUPE     SQLite index, by canonical domain then normalised
+  │             name.  ← this is the actual product
+  │
+  ├──────────── only companies never seen before get past here
+  │
+  4. ENRICH     what does this company actually do?
+  │             a filing never says, so it has to be looked up
+  │
+  5. JUDGE      does it fit, and one line on what they do
+  │             ← the only step where a model has an opinion
+  │
+  6. RECORD     write to the seen-index and the judgement table
+  │
+  7. EMAIL      render and send
+  │
+  └──────────── the website and question box read the same tables
+```
+
+Steps 1–3 and 6 are ordinary code with no model anywhere near them, which is why
+all 207 tests run offline. Step 5 is the one place something forms an opinion, and
+whatever it returns gets schema-validated before anything is written.
+
+That split is the whole design: **judgement from the model, mechanics from code,
+validation in between.** If the model returns nonsense the run records a problem
+and moves on — it never guesses a verdict and never marks that company as seen, so
+tomorrow gets another attempt.
+
+### The stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Language | Python 3.11+ | it's mostly I/O and parsing |
+| Seen-index | SQLite (stdlib) | exact lookups, thousands of rows, hit on every filing |
+| Schemas | Pydantic | the validation boundary between model and disk |
+| HTTP | httpx | — |
+| Filing parsing | `xml.etree` (stdlib) | Form D is small, structured XML |
+| Enrichment | Tavily | finding out what a company does |
+| Judging | OpenRouter, structured output | short verdict per filing, no agent loop needed |
+| Email | `smtplib` (stdlib) | Gmail over STARTTLS on 587 |
+| API | FastAPI | the OpenAPI schema generates the frontend types |
+| Website | Next.js + Tailwind | types come from that schema |
+| Scheduling | cron | survives reboots, needs nothing else running |
+
+### Three decisions worth explaining
+
+**A direct API call rather than an agent.** The sibling project runs its research
+through a Hermes agent, and that's right there because research needs steering and
+follow-up. Here it doesn't. Scoring 130 filings a day is a short structured verdict
+per filing, and an agent loop with tool access would take far longer per company and
+add nothing. Different job, different tool.
+
+**SQLite rather than files on disk.** Everything else here would be fine as JSON,
+but the seen-index gets queried on every single filing and grows into the
+thousands. It's also the one thing that has to be *provably* right — "skipped 64
+you've already seen" is only worth printing if it's true. SQLite is in the standard
+library, so it cost nothing to use.
+
+**No LLM in the data layer, on purpose.** It would have been easier to let a model
+do the filtering and deduplicating too. But then nothing is testable without a
+network and a bill, and "have I seen this company?" becomes a question with a
+probabilistic answer. That's the wrong kind of answer for the one thing the product
+depends on.
+
 ## What it looks for
 
 Right now: **healthcare AI and clinical software** — trials, diagnostics, care
