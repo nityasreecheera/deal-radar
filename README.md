@@ -152,6 +152,99 @@ verification roles.
 Different sectors want different products. Long tail of new companies wants a
 radar. Short list of known players wants a map.
 
+## Architecture
+
+```
+CRON  (daily, on the VM — nothing needs to be running)
+  │
+  1. FETCH      SEC EDGAR daily index → Form D filings
+  │             stdlib XML parse, no model involved
+  │
+  2. FILTER     keep industryGroup == "Health Care"
+  │             free — it is a field in the filing itself
+  │
+  3. DEDUPE     SQLite seen-index, by canonical domain
+  │             then normalised name.  ← this is the product
+  │             (only new companies pass through)
+  │
+  4. ENRICH     what does this company actually do?
+  │             a filing barely says, so look it up
+  │
+  5. JUDGE      fit against the thesis, plus one line of why
+  │             ← the only step where a model has an opinion
+  │
+  6. RECORD     write to the seen-index and the candidate store
+  │
+  7. DIGEST     render, then push to Slack
+  │
+  └──────────────────────────────────────────────────
+        the same store is read by:
+        · the web UI — browse, triage
+        · the chat endpoint — read-only, no tools
+```
+
+Steps 1–3 and 6 are ordinary deterministic software, testable offline with no
+network. Step 5 is the only place a model forms a judgement, and its output is
+schema-validated before anything is written.
+
+**Judgement from the model, mechanics from software, validation as the guardrail
+between them.**
+
+## Stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Language | Python 3.11 | this is I/O and parsing |
+| Seen-index | SQLite (stdlib) | exact lookups, thousands of rows, hit per filing |
+| Schemas | Pydantic | the validation boundary |
+| HTTP | httpx | — |
+| Filing parse | `xml.etree` (stdlib) | Form D is small structured XML |
+| Enrichment | Tavily | web lookup for what a company does |
+| Fit judgement | Claude API, structured output | batch scoring, no agent loop needed |
+| Deep research | Hermes agent + skill | interactive and steerable, has tools |
+| Digest delivery | `hermes send -t slack` | already built and credentialed |
+| API | FastAPI | OpenAPI schema generated from the Pydantic models |
+| Web | Next.js + Tailwind | frontend types generated from that schema |
+| Chat | FastAPI + Claude API, no tools | capability-restricted by construction |
+| Schedule | systemd timer | survives reboots, needs nothing else running |
+
+### Three decisions worth recording
+
+**Claude API for scoring, Hermes for research.** A deliberate split. Scoring
+thirty filings a day is a short structured judgement per item; an agent loop with
+tool access would take far longer per filing and add nothing. Hermes stays for
+interactive work, where steering and follow-up questions are the point.
+
+**SQLite, not JSON files.** The sibling project stores JSON on disk, which is
+right for dozens of profiles. The seen-index is a lookup workload that grows into
+the thousands and is queried on every filing. SQLite is in the standard library,
+so adopting it costs nothing.
+
+**Copy the normalisers, do not couple the repositories.** `normalize_domain` and
+`normalize_company_name` from the sibling project are about forty lines and
+exactly what deduplication needs here. Copied with a note on their origin, rather
+than making one early-stage project depend on another while both are still
+changing shape.
+
+## Where things run
+
+- **VM** — cron, ingestion, SQLite, API, web. It is the always-on machine.
+- **Laptop** — development and git.
+- **Slack** — where the digest arrives.
+- **Nothing public** beyond what is deliberately tunnelled.
+
+## Storage
+
+```
+data/radar.sqlite        seen-index and candidates
+config/thesis.yaml       fit criteria — the file edited after talking to investors
+outputs/digests/*.md     what was sent, so a digest can be audited later
+```
+
+`thesis.yaml` is a plain readable file on purpose. The criteria deciding what you
+see should be something you can open and argue with, not weights buried in a
+prompt.
+
 ## Deliberate non-goals
 
 - **No LLM calls in the data layer.** Fetching, deduplication, and validation are
