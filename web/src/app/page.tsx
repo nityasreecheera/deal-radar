@@ -167,14 +167,14 @@ export default function Home() {
           <div className="flex flex-wrap items-end gap-4">
             <label className="text-xs">
               <span className="mb-1 block uppercase tracking-wide text-slate-500">
-                Theme
+                Domain
               </span>
               <select
                 value={theme}
                 onChange={(event) => setTheme(event.target.value)}
                 className="rounded border border-slate-300 px-2 py-1 text-sm"
               >
-                <option value="">All themes</option>
+                <option value="">All domains</option>
                 {(meta?.themes ?? []).map((name) => (
                   <option key={name} value={name}>
                     {name}

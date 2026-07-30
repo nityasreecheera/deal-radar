@@ -39,6 +39,7 @@ def filing(**overrides) -> FormDFiling:
 def thesis() -> Thesis:
     return Thesis.model_validate(
         {
+            "domain": "Healthcare",
             "name": "Healthcare software",
             "description": "Software for clinical workflows.",
             "include": ["clinical trial software"],

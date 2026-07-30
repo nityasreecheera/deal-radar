@@ -167,6 +167,32 @@ def command_candidates(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_set_domain(args: argparse.Namespace) -> int:
+    """
+    Label judgements that have no domain recorded.
+
+    Rows judged before the column existed have none. They were all judged
+    against the single thesis in use at the time, so recording that is accurate
+    rather than invented — which is why this only fills blanks by default.
+    """
+    with closing(connect(Path(args.db) if args.db else None)) as connection:
+        clause = "" if args.overwrite else " WHERE theme IS NULL OR theme = ''"
+        cursor = connection.execute(
+            f"UPDATE candidate SET theme = ?{clause}",
+            (args.domain,),
+        )
+        connection.commit()
+
+        print(
+            json.dumps(
+                {"ok": True, "domain": args.domain, "updated": cursor.rowcount},
+                indent=2,
+            )
+        )
+
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python3 -m src.cli",
@@ -247,6 +273,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     candidates_parser.add_argument("--db", help="path to the seen-index")
     candidates_parser.set_defaults(handler=command_candidates)
+
+    domain_parser = subparsers.add_parser(
+        "set-domain",
+        help="label judgements that have no domain recorded",
+    )
+    domain_parser.add_argument("--domain", required=True)
+    domain_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="relabel everything, not only the blanks",
+    )
+    domain_parser.add_argument("--db", help="path to the seen-index")
+    domain_parser.set_defaults(handler=command_set_domain)
 
     return parser
 

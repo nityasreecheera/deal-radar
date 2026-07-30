@@ -31,6 +31,7 @@ def filing(**overrides) -> FormDFiling:
 
 def thesis(**overrides) -> Thesis:
     data = {
+        "domain": "TestDomain",
         "name": "Test thesis",
         "description": "Healthcare software.",
         "include": ["clinical software"],
@@ -198,5 +199,5 @@ def test_prompt_description_omits_an_empty_exclude_list() -> None:
 def test_a_thesis_needs_at_least_one_include() -> None:
     with pytest.raises(Exception):
         Thesis.model_validate(
-            {"name": "x", "description": "y", "include": []}
+            {"domain": "D", "name": "x", "description": "y", "include": []}
         )

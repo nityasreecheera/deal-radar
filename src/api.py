@@ -29,7 +29,7 @@ from src.candidates import (
 )
 from src.chat import ChatAnswer, ChatError, answer_question
 from src.seen import connect, count_seen
-from src.thesis import ThesisError, load_thesis
+from src.thesis import ThesisError, available_themes, load_thesis
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -133,14 +133,21 @@ def get_meta() -> Meta:
         # A missing or broken thesis file should not blank the whole interface.
         thesis_name = None
 
+    # Configured domains and domains present in the data are both real. A
+    # domain configured this morning has judged nothing yet, and omitting it
+    # makes it look absent; a domain whose file was deleted still has history
+    # worth filtering to.
+    configured = available_themes()
+
     with closing(connect()) as connection:
         earliest, latest = date_range(connection)
+        in_data = known_themes(connection)
 
         return Meta(
             companies_known=count_seen(connection),
             judgements=count_by_verdict(connection),
             unread=count_unread(connection),
-            themes=known_themes(connection),
+            themes=sorted(set(configured) | set(in_data)),
             earliest_filing=earliest,
             latest_filing=latest,
             thesis_name=thesis_name,

@@ -59,6 +59,10 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     )
     monkeypatch.setattr(api_module, "DIGEST_DIR", tmp_path / "digests")
 
+    # Configured domains come from config/*.yaml on disk. Left unpatched, every
+    # theme assertion would depend on the shipped thesis file.
+    monkeypatch.setattr(api_module, "available_themes", lambda: [])
+
     return tmp_path
 
 
@@ -81,6 +85,26 @@ def test_meta_on_an_empty_database() -> None:
     assert body["themes"] == []
     assert body["earliest_filing"] is None
     assert body["digest_dates"] == []
+
+
+def test_meta_includes_a_configured_domain_that_has_never_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A domain configured this morning has judged nothing yet. Omitting it makes
+    # it look absent, so the dropdown would not offer it.
+    monkeypatch.setattr(api_module, "available_themes", lambda: ["Finance"])
+
+    assert client.get("/api/meta").json()["themes"] == ["Finance"]
+
+
+def test_meta_merges_configured_and_observed_domains(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed(candidate(accession="a"), theme="Healthcare")
+    monkeypatch.setattr(api_module, "available_themes", lambda: ["Finance"])
+
+    # Both are real: one has history, the other is configured and pending.
+    assert client.get("/api/meta").json()["themes"] == ["Finance", "Healthcare"]
 
 
 def test_meta_reports_themes_and_bounds() -> None:

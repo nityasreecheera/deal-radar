@@ -10,6 +10,9 @@
 #   - What kills a company in the first thirty seconds?
 #   - What have you passed on and regretted?
 
+# Short label for the dropdown. One word where possible.
+domain: Healthcare
+
 name: Healthcare AI and clinical software
 
 # Which SEC industry groups to search. This is a thesis decision, not a

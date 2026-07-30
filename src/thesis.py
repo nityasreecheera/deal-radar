@@ -38,6 +38,12 @@ class ThesisFilters(BaseModel):
 class Thesis(BaseModel):
     """What the radar is looking for."""
 
+    # A short label — "Healthcare", "Finance", "Chips". This is what gets stored
+    # on each judgement and shown in the domain dropdown, kept separate from
+    # `name` because "Healthcare AI and clinical software" is a description and
+    # makes a poor menu item.
+    domain: str = Field(min_length=1, max_length=40)
+
     name: str = Field(min_length=1)
     description: str = Field(min_length=1)
     include: list[str] = Field(min_length=1)
@@ -72,6 +78,36 @@ def load_thesis(path: Path | None = None) -> Thesis:
         raise ThesisError(f"{location.name} should contain a mapping")
 
     return Thesis.model_validate(raw)
+
+
+def thesis_files(directory: Path | None = None) -> list[Path]:
+    """Every thesis file on disk. One file per domain."""
+    folder = directory or DEFAULT_THESIS_PATH.parent
+
+    if not folder.exists():
+        return []
+
+    return sorted(folder.glob("*.yaml"))
+
+
+def available_themes(directory: Path | None = None) -> list[str]:
+    """
+    Short domain labels from the thesis files, whether or not they have run.
+
+    The dropdown reads these as well as the themes present in stored judgements.
+    Data alone is not enough: a domain configured this morning has judged nothing
+    yet, and leaving it out of the list makes it look like it does not exist. An
+    unreadable file is skipped rather than breaking the whole list.
+    """
+    names: list[str] = []
+
+    for path in thesis_files(directory):
+        try:
+            names.append(load_thesis(path).domain)
+        except (ThesisError, Exception):  # noqa: BLE001
+            continue
+
+    return sorted(set(names))
 
 
 def matches_excluded_name(name: str, patterns: list[str]) -> bool:
