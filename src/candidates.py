@@ -38,10 +38,22 @@ class StoredCandidate(BaseModel):
     incorporated: int | None = None
     judged_at: str = Field(min_length=1)
 
+    # Which thesis reached this verdict. A verdict without it is ambiguous once
+    # more than one theme exists.
+    theme: str | None = None
+
+    # Null means nobody has read it yet.
+    viewed_at: str | None = None
+
+    @property
+    def is_unread(self) -> bool:
+        return self.viewed_at is None
+
 
 def save_candidate(
     connection: sqlite3.Connection,
     candidate: Candidate,
+    theme: str | None = None,
     judged_at: str | None = None,
 ) -> StoredCandidate:
     """
@@ -60,9 +72,9 @@ def save_candidate(
         INSERT INTO candidate (
             accession, canonical_name, company_name, verdict, reason,
             website, description, offering_amount, filed_date,
-            industry_group, city, state, incorporated, judged_at
+            industry_group, city, state, incorporated, judged_at, theme
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (accession) DO UPDATE SET
             verdict         = excluded.verdict,
             reason          = excluded.reason,
@@ -70,7 +82,8 @@ def save_candidate(
             description     = COALESCE(
                 excluded.description, candidate.description
             ),
-            judged_at       = excluded.judged_at
+            judged_at       = excluded.judged_at,
+            theme           = COALESCE(excluded.theme, candidate.theme)
         """,
         (
             filing.accession,
@@ -87,6 +100,7 @@ def save_candidate(
             filing.state,
             filing.year_of_incorporation,
             timestamp,
+            theme,
         ),
     )
     connection.commit()
@@ -145,13 +159,18 @@ def list_candidates(
     connection: sqlite3.Connection,
     verdicts: list[str] | None = None,
     since: str | None = None,
+    until: str | None = None,
+    theme: str | None = None,
+    unread_only: bool = False,
     limit: int | None = None,
 ) -> list[StoredCandidate]:
     """
     List judgements, newest filing first.
 
-    `verdicts` and `since` are both optional filters. Parameters are bound rather
-    than interpolated even though every caller is currently internal.
+    Every filter is optional and combines with the others. Parameters are bound
+    rather than interpolated, even though every caller is currently internal —
+    `theme` comes from a dropdown and `since` from a date picker, and both will
+    eventually arrive from a browser.
     """
     query = ["SELECT * FROM candidate"]
     clauses: list[str] = []
@@ -165,6 +184,17 @@ def list_candidates(
     if since:
         clauses.append("filed_date >= ?")
         parameters.append(since)
+
+    if until:
+        clauses.append("filed_date <= ?")
+        parameters.append(until)
+
+    if theme:
+        clauses.append("theme = ?")
+        parameters.append(theme)
+
+    if unread_only:
+        clauses.append("viewed_at IS NULL")
 
     if clauses:
         query.append("WHERE " + " AND ".join(clauses))
@@ -180,6 +210,56 @@ def list_candidates(
     return [StoredCandidate(**dict(row)) for row in rows]
 
 
+def mark_viewed(
+    connection: sqlite3.Connection,
+    accession: str,
+    viewed_at: str | None = None,
+) -> StoredCandidate | None:
+    """
+    Record that a human has read this one.
+
+    The first reading is the one kept. Re-opening something does not make it
+    newly read, and the interface only needs to know read from unread.
+    """
+    timestamp = viewed_at or datetime.now(UTC).isoformat()
+
+    connection.execute(
+        """
+        UPDATE candidate
+        SET viewed_at = COALESCE(viewed_at, ?)
+        WHERE accession = ?
+        """,
+        (timestamp, accession),
+    )
+    connection.commit()
+
+    return get_candidate(connection, accession)
+
+
+def mark_all_viewed(
+    connection: sqlite3.Connection,
+    theme: str | None = None,
+    viewed_at: str | None = None,
+) -> int:
+    """Mark everything unread as read. Returns how many changed."""
+    timestamp = viewed_at or datetime.now(UTC).isoformat()
+
+    parameters: list[object] = [timestamp]
+    clause = "viewed_at IS NULL"
+
+    if theme:
+        clause += " AND theme = ?"
+        parameters.append(theme)
+
+    cursor = connection.execute(
+        f"UPDATE candidate SET viewed_at = ? WHERE {clause}",
+        parameters,
+    )
+    connection.commit()
+
+    return cursor.rowcount
+
+
 def count_by_verdict(connection: sqlite3.Connection) -> dict[str, int]:
     """Tally judgements by verdict."""
     rows = connection.execute(
@@ -187,6 +267,54 @@ def count_by_verdict(connection: sqlite3.Connection) -> dict[str, int]:
     ).fetchall()
 
     return {row["verdict"]: int(row["n"]) for row in rows}
+
+
+def count_unread(
+    connection: sqlite3.Connection,
+    theme: str | None = None,
+) -> int:
+    """How many judgements nobody has read — the inbox badge."""
+    if theme:
+        row = connection.execute(
+            "SELECT COUNT(*) AS n FROM candidate "
+            "WHERE viewed_at IS NULL AND theme = ?",
+            (theme,),
+        ).fetchone()
+    else:
+        row = connection.execute(
+            "SELECT COUNT(*) AS n FROM candidate WHERE viewed_at IS NULL"
+        ).fetchone()
+
+    return int(row["n"])
+
+
+def known_themes(connection: sqlite3.Connection) -> list[str]:
+    """
+    Which themes appear in stored judgements.
+
+    Read from the data rather than from config, so the dropdown reflects what
+    actually exists rather than what is configured but never run.
+    """
+    rows = connection.execute(
+        "SELECT DISTINCT theme FROM candidate "
+        "WHERE theme IS NOT NULL AND theme != '' ORDER BY theme"
+    ).fetchall()
+
+    return [row["theme"] for row in rows]
+
+
+def date_range(connection: sqlite3.Connection) -> tuple[str | None, str | None]:
+    """
+    Earliest and latest filing dates on record.
+
+    The date picker needs bounds; offering a calendar over years with no data
+    is a way of implying coverage that does not exist.
+    """
+    row = connection.execute(
+        "SELECT MIN(filed_date) AS lo, MAX(filed_date) AS hi FROM candidate"
+    ).fetchone()
+
+    return row["lo"], row["hi"]
 
 
 if __name__ == "__main__":

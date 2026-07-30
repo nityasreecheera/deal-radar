@@ -142,7 +142,10 @@ def run_radar(
             # And the judgement itself is kept, not just the fact of having
             # looked. Rendering a digest used to be the only place a verdict
             # existed, so it was gone as soon as the message was sent.
-            save_candidate(connection, candidate)
+            #
+            # The thesis name goes with it: the same company can fit one theme
+            # and not another, so a verdict without its theme is ambiguous.
+            save_candidate(connection, candidate, theme=thesis.name)
 
     return RadarRun(
         start_date=start_date,

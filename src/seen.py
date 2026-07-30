@@ -20,7 +20,12 @@ from src.normalize import normalize_company_name, normalize_domain
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "radar.sqlite"
 
-SCHEMA = """
+     # Tables and indexes are separate because order matters. An index on a
+# Tables and indexes are declared separately because order matters. An index on
+# a column that migration is about to add cannot be created before the column
+# exists, so the sequence is: tables, then missing columns, then indexes. Doing
+# it in one script fails on any database created before a column was added.
+SCHEMA_TABLES = """
 CREATE TABLE IF NOT EXISTS seen_company (
     canonical_name   TEXT PRIMARY KEY,
     company_name     TEXT NOT NULL,
@@ -29,12 +34,6 @@ CREATE TABLE IF NOT EXISTS seen_company (
     source           TEXT NOT NULL,
     accession        TEXT
 );
-
--- Domains are the more reliable identity when we have one, but a Form D never
--- provides one, so it arrives later through enrichment and stays nullable.
-CREATE INDEX IF NOT EXISTS idx_seen_domain
-    ON seen_company (canonical_domain)
-    WHERE canonical_domain IS NOT NULL;
 
 -- What we concluded, not merely that we looked.
 --
@@ -59,23 +58,88 @@ CREATE TABLE IF NOT EXISTS candidate (
     city             TEXT,
     state            TEXT,
     incorporated     INTEGER,
-    judged_at        TEXT NOT NULL
+    judged_at        TEXT NOT NULL,
+
+    -- Which thesis reached this verdict. The same company can fit one theme and
+    -- not another, so a verdict is meaningless without knowing what it was
+    -- judged against.
+    theme            TEXT,
+
+    -- When a human actually read it. Null means unread, which is what the
+    -- interface greys out or highlights.
+    viewed_at        TEXT
 );
+"""
+
+SCHEMA_INDEXES = """
+-- Domains are the more reliable identity when we have one, but a Form D never
+-- provides one, so it arrives later through enrichment and stays nullable.
+CREATE INDEX IF NOT EXISTS idx_seen_domain
+    ON seen_company (canonical_domain)
+    WHERE canonical_domain IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_candidate_verdict ON candidate (verdict);
 CREATE INDEX IF NOT EXISTS idx_candidate_name ON candidate (canonical_name);
 CREATE INDEX IF NOT EXISTS idx_candidate_filed ON candidate (filed_date DESC);
+CREATE INDEX IF NOT EXISTS idx_candidate_theme ON candidate (theme);
+CREATE INDEX IF NOT EXISTS idx_candidate_viewed ON candidate (viewed_at);
 """
 
 
+# Columns added after the table was already in use somewhere. CREATE TABLE IF
+# NOT EXISTS does nothing to an existing table, so new columns have to be added
+# explicitly or a deployed database silently lacks them.
+MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    # (table, column, DDL to add it)
+    ("candidate", "theme", "ALTER TABLE candidate ADD COLUMN theme TEXT"),
+    ("candidate", "viewed_at", "ALTER TABLE candidate ADD COLUMN viewed_at TEXT"),
+)
+
+
+def existing_columns(connection: sqlite3.Connection, table: str) -> set[str]:
+    """Column names on a table, or an empty set if the table is absent."""
+    rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+
+    return {row["name"] for row in rows}
+
+
+def apply_migrations(connection: sqlite3.Connection) -> list[str]:
+    """
+    Add any columns missing from an existing database.
+
+    Returns what was applied, so a caller can log it. Idempotent: running twice
+    is a no-op, which matters because this runs on every connect.
+    """
+    applied: list[str] = []
+
+    for table, column, statement in MIGRATIONS:
+        columns = existing_columns(connection, table)
+
+        if not columns or column in columns:
+            continue
+
+        connection.execute(statement)
+        applied.append(f"{table}.{column}")
+
+    if applied:
+        connection.commit()
+
+    return applied
+
+
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
-    """Open the index, creating the file and schema if needed."""
+    """Open the index, creating or updating the schema as needed."""
     location = db_path or DEFAULT_DB_PATH
     location.parent.mkdir(parents=True, exist_ok=True)
 
     connection = sqlite3.connect(location)
     connection.row_factory = sqlite3.Row
-    connection.executescript(SCHEMA)
+
+    # Order is deliberate: an index cannot be built on a column that migration
+    # has not added yet.
+    connection.executescript(SCHEMA_TABLES)
+    apply_migrations(connection)
+    connection.executescript(SCHEMA_INDEXES)
 
     return connection
 
