@@ -8,8 +8,6 @@ it feels like coverage.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
 from pathlib import Path
 
 from src.models import Candidate
@@ -127,35 +125,3 @@ def save_digest(
     temporary.replace(path)
 
     return path
-
-
-def send_to_slack(content: str, target: str = "slack") -> tuple[bool, str]:
-    """
-    Deliver the digest through Hermes, which already holds Slack credentials.
-
-    Returns whether it sent and a message either way. Reusing `hermes send`
-    avoids creating and credentialing a second Slack app for one message a day.
-    """
-    hermes = shutil.which("hermes")
-
-    if hermes is None:
-        return False, "hermes is not on PATH, so the digest was not sent"
-
-    try:
-        result = subprocess.run(
-            [hermes, "send", "-t", target],
-            input=content,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return False, "hermes send timed out"
-
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip()
-
-        return False, f"hermes send failed: {detail[:200]}"
-
-    return True, f"sent to {target}"

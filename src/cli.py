@@ -8,7 +8,8 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
-from src.digest import render_digest, save_digest, send_to_slack
+from src.delivery import deliver
+from src.digest import render_digest, save_digest
 from src.edgar import fetch_filings
 from src.pipeline import default_window, run_radar
 from src.seen import connect, count_seen
@@ -75,7 +76,12 @@ def command_run(args: argparse.Namespace) -> int:
     print(f"saved {path}", file=sys.stderr)
 
     if args.send:
-        sent, message = send_to_slack(digest)
+        first_line = digest.splitlines()[0] if digest else "Deal Radar"
+        sent, message = deliver(
+            digest,
+            subject=first_line,
+            prefer_slack=args.slack,
+        )
         print(message, file=sys.stderr)
 
         if not sent:
@@ -132,7 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--send",
         action="store_true",
-        help="deliver the digest to Slack through hermes",
+        help="deliver the digest by email, falling back to Slack",
+    )
+    run_parser.add_argument(
+        "--slack",
+        action="store_true",
+        help="deliver via Slack instead of trying email first",
     )
     run_parser.set_defaults(handler=command_run)
 
