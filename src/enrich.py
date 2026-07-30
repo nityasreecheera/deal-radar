@@ -41,6 +41,28 @@ NON_COMPANY_DOMAINS = {
     "zoominfo.com",
 }
 
+# Pages that live on a company's own domain but describe nothing about the
+# business. Search engines return these constantly, and a terms-of-use page as
+# evidence produces a shrug from the judging step rather than a verdict.
+BOILERPLATE_PATH_MARKERS = (
+    "privacy",
+    "terms",
+    "legal",
+    "cookie",
+    "disclaimer",
+    "accessibility",
+    "team",
+    "leadership",
+    "careers",
+    "jobs",
+    "contact",
+    "login",
+    "signin",
+    "sign-in",
+    "press",
+    "blog",
+)
+
 SearchFunction = Callable[[str, int], dict[str, Any]]
 
 
@@ -127,6 +149,51 @@ def looks_like_own_site(domain: str | None, company_name: str) -> bool:
     return stem.startswith(canonical[:6]) or canonical.startswith(stem[:6])
 
 
+def page_depth(url: str) -> int:
+    """How many path segments a URL has. A homepage has none."""
+    path = url.split("://", 1)[-1]
+    segments = [part for part in path.split("/")[1:] if part]
+
+    return len(segments)
+
+
+def is_boilerplate(url: str) -> bool:
+    """Whether a URL looks like a page that describes no product."""
+    lowered = url.lower()
+
+    return any(marker in lowered for marker in BOILERPLATE_PATH_MARKERS)
+
+
+def rank_own_pages(
+    results: list[dict[str, Any]],
+    company_name: str,
+) -> list[dict[str, Any]]:
+    """
+    Order a company's own pages by how likely they are to describe the business.
+
+    Search returns whichever page matched, which is very often a terms-of-use or
+    team page. Those sit on the right domain and say nothing, so preferring the
+    shallowest non-boilerplate URL matters more than it sounds: the difference is
+    between a verdict and a shrug.
+    """
+    own = [
+        item
+        for item in results
+        if looks_like_own_site(
+            normalize_domain(str(item.get("url") or "")), company_name
+        )
+    ]
+
+    return sorted(
+        own,
+        key=lambda item: (
+            is_boilerplate(str(item.get("url") or "")),
+            page_depth(str(item.get("url") or "")),
+            not str(item.get("content") or "").strip(),
+        ),
+    )
+
+
 def enrich_filing(
     filing: FormDFiling,
     search: SearchFunction | None = None,
@@ -135,45 +202,44 @@ def enrich_filing(
     """
     Look up what a company does.
 
-    `confident` records whether a domain matching the company's own name was
-    found. When it is False the description came from somewhere other than the
-    company itself, and the judging step is told so rather than being handed a
-    guess dressed as a fact.
+    `confident` records whether a page on the company's own domain was found.
+    When it is False the description came from somewhere else, and the judging
+    step is told so rather than being handed a guess dressed as a fact.
     """
     searcher = search or create_tavily_search()
 
     payload = searcher(build_query(filing), max_results)
     results = payload.get("results") or []
 
+    evidence = [
+        str(item.get("url") or "").strip()
+        for item in results
+        if str(item.get("url") or "").strip()
+    ]
+
+    own_pages = rank_own_pages(results, filing.company_name)
+
     website: str | None = None
     domain: str | None = None
     description: str | None = None
-    evidence: list[str] = []
 
-    for item in results:
-        url = str(item.get("url") or "").strip()
+    if own_pages:
+        best = own_pages[0]
+        website = str(best.get("url"))
+        domain = normalize_domain(website)
 
-        if not url:
-            continue
-
-        evidence.append(url)
-
-        candidate_domain = normalize_domain(url)
-
-        if website is None and looks_like_own_site(
-            candidate_domain, filing.company_name
-        ):
-            website = url
-            domain = candidate_domain
-
+        # Take the description from the best-ranked own page that actually has
+        # content, which may not be the best-ranked page overall.
+        for item in own_pages:
             content = str(item.get("content") or "").strip()
 
             if content:
                 description = content
+                break
 
     if description is None:
-        # No homepage found. Fall back to the first substantive snippet, and
-        # leave `confident` False so the judge knows the provenance is weaker.
+        # Nothing on their own domain said anything. Fall back to any snippet and
+        # leave `confident` reflecting that provenance is weaker.
         for item in results:
             content = str(item.get("content") or "").strip()
 

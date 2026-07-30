@@ -3,7 +3,10 @@ from typing import Any
 from src.enrich import (
     build_query,
     enrich_filing,
+    is_boilerplate,
     looks_like_own_site,
+    page_depth,
+    rank_own_pages,
 )
 from src.models import FormDFiling
 
@@ -132,6 +135,125 @@ def test_enrichment_prefers_the_homepage_over_an_earlier_snippet() -> None:
 
     assert result.description == "Our platform."
     assert result.confident is True
+
+
+def test_page_depth_counts_path_segments() -> None:
+    assert page_depth("https://example.com") == 0
+    assert page_depth("https://example.com/") == 0
+    assert page_depth("https://example.com/about") == 1
+    assert page_depth("https://example.com/legal/terms-of-use") == 2
+
+
+def test_boilerplate_pages_are_recognised() -> None:
+    # Every one of these was returned as a real company's "site" in a live run.
+    assert is_boilerplate("https://preventivemd.com/terms-of-use") is True
+    assert is_boilerplate("https://qualifiedhealthai.com/privacy-policy") is True
+    assert is_boilerplate("https://rxsavecard.com/our-leadership-team") is True
+    assert is_boilerplate("https://example.com/careers/engineer") is True
+
+    assert is_boilerplate("https://example.com") is False
+    assert is_boilerplate("https://example.com/product") is False
+
+
+def test_own_pages_rank_the_homepage_above_boilerplate() -> None:
+    ranked = rank_own_pages(
+        [
+            {"url": "https://acmehealth.com/privacy-policy", "content": "Privacy."},
+            {"url": "https://acmehealth.com", "content": "We do trials."},
+            {"url": "https://acmehealth.com/about/team", "content": "Our team."},
+        ],
+        "Acme Health, Inc.",
+    )
+
+    # Only the first pick matters. Both other pages are boilerplate — /about/team
+    # matches on "team" — so their relative order is irrelevant.
+    assert ranked[0]["url"] == "https://acmehealth.com"
+    assert len(ranked) == 3
+
+
+def test_own_pages_prefer_shallower_paths() -> None:
+    ranked = rank_own_pages(
+        [
+            {"url": "https://acmehealth.com/solutions/clinical/trials", "content": "x"},
+            {"url": "https://acmehealth.com/product", "content": "y"},
+        ],
+        "Acme Health, Inc.",
+    )
+
+    assert ranked[0]["url"] == "https://acmehealth.com/product"
+
+
+def test_own_pages_exclude_other_domains() -> None:
+    ranked = rank_own_pages(
+        [
+            {"url": "https://linkedin.com/company/acmehealth", "content": "x"},
+            {"url": "https://acmehealth.com", "content": "y"},
+        ],
+        "Acme Health, Inc.",
+    )
+
+    assert len(ranked) == 1
+    assert ranked[0]["url"] == "https://acmehealth.com"
+
+
+def test_enrichment_avoids_a_boilerplate_page_when_a_homepage_exists() -> None:
+    # This is the live failure: search returned terms-of-use, which describes
+    # nothing, and the judge could only answer "maybe".
+    result = enrich_filing(
+        filing(company_name="PreventiveMD, Inc."),
+        search=stub(
+            [
+                {
+                    "url": "https://www.preventivemd.com/terms-of-use",
+                    "content": "These terms govern your use of the site.",
+                },
+                {
+                    "url": "https://www.preventivemd.com",
+                    "content": "Preventive care software for primary care clinics.",
+                },
+            ]
+        ),
+    )
+
+    assert result.website == "https://www.preventivemd.com"
+    assert result.description == "Preventive care software for primary care clinics."
+
+
+def test_enrichment_still_uses_boilerplate_if_it_is_all_there_is() -> None:
+    # Weak evidence beats none, and the judge is told the provenance.
+    result = enrich_filing(
+        filing(company_name="PreventiveMD, Inc."),
+        search=stub(
+            [
+                {
+                    "url": "https://www.preventivemd.com/terms-of-use",
+                    "content": "These terms govern your use of the site.",
+                }
+            ]
+        ),
+    )
+
+    assert result.website == "https://www.preventivemd.com/terms-of-use"
+    assert result.confident is True
+
+
+def test_enrichment_falls_back_to_a_deeper_own_page_that_has_content() -> None:
+    # The best-ranked page may have no snippet at all.
+    result = enrich_filing(
+        filing(company_name="PreventiveMD, Inc."),
+        search=stub(
+            [
+                {"url": "https://www.preventivemd.com", "content": ""},
+                {
+                    "url": "https://www.preventivemd.com/product",
+                    "content": "Our platform screens patients.",
+                },
+            ]
+        ),
+    )
+
+    assert result.website == "https://www.preventivemd.com"
+    assert result.description == "Our platform screens patients."
 
 
 def test_enrichment_tolerates_a_payload_without_results() -> None:
