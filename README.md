@@ -187,6 +187,26 @@ validation in between.** If the model returns nonsense the run records a problem
 and moves on — it never guesses a verdict and never marks that company as seen, so
 tomorrow gets another attempt.
 
+### What it depends on outside
+
+Three services. One is free, two cost a little.
+
+| Service | What it gives us | Cost |
+|---|---|---|
+| **SEC EDGAR** | the filings themselves — who raised, how much, who runs the company | free, no signup, no key |
+| **Tavily** | web search, to find out what a company actually does | free tier covers ~500/month, which is about what a month of running uses |
+| **OpenRouter** | the model that judges each company | roughly $2/month at current volume |
+
+EDGAR is the one that matters and it's the one that's free. It's the US
+government's filing system — when a company raises money it has to file a Form D,
+and that form is public the day it's submitted. No account, no rate limit worth
+worrying about, no terms to fall foul of. It just needs a User-Agent header with a
+contact address or it returns 403.
+
+The other two are replaceable. Tavily is just a search API, and the judge talks to
+an OpenAI-compatible endpoint, so pointing `LLM_BASE_URL` somewhere else is a
+config change rather than a rewrite.
+
 ### The stack
 
 | Layer | Choice | Why |
@@ -370,6 +390,35 @@ relabelling them, since a verdict reached on missing evidence deserves another l
 at the evidence.
 
 ## Layout
+
+Each module does one job. `pipeline.py` is the only thing that knows the order
+they go in:
+
+```
+cron
+ └─ cli.py                      the command surface
+     └─ pipeline.py             runs everything in order
+         ├─ edgar.py            → SEC EDGAR      get the filings
+         ├─ thesis.py           → config/*.yaml  throw out the junk, free
+         ├─ seen.py             → SQLite         "have we seen this before?"
+         ├─ enrich.py           → Tavily         "what do they actually do?"
+         ├─ judge.py            → OpenRouter     "is this interesting?"
+         ├─ candidates.py       → SQLite         write down what was decided
+         ├─ digest.py                            write the short list
+         └─ delivery.py         → SMTP           email it
+```
+
+The website is a separate path and never runs any of that. It only reads what has
+already been written:
+
+```
+browser → web/ → api.py → SQLite
+                   └─ chat.py → OpenRouter   (answers from stored rows only)
+```
+
+Two things follow from that split. The radar works with nothing running and no
+browser open. And nothing you do on the website can change what the radar decided —
+the only thing it writes is whether you have read a row.
 
 | Module | What it does |
 |---|---|
