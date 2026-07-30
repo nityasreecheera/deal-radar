@@ -35,6 +35,36 @@ CREATE TABLE IF NOT EXISTS seen_company (
 CREATE INDEX IF NOT EXISTS idx_seen_domain
     ON seen_company (canonical_domain)
     WHERE canonical_domain IS NOT NULL;
+
+-- What we concluded, not merely that we looked.
+--
+-- The seen-index answers "have I encountered this company?" and that is all it
+-- needs to do. This table answers "what did I decide, and why?" — which is the
+-- question an analyst actually asks six months later, and the one that was
+-- previously lost the moment a digest was rendered.
+--
+-- Keyed on accession rather than company, because a company can file more than
+-- once and each filing is a separate judgement made on separate evidence.
+CREATE TABLE IF NOT EXISTS candidate (
+    accession        TEXT PRIMARY KEY,
+    canonical_name   TEXT NOT NULL,
+    company_name     TEXT NOT NULL,
+    verdict          TEXT NOT NULL,
+    reason           TEXT NOT NULL,
+    website          TEXT,
+    description      TEXT,
+    offering_amount  INTEGER,
+    filed_date       TEXT NOT NULL,
+    industry_group   TEXT,
+    city             TEXT,
+    state            TEXT,
+    incorporated     INTEGER,
+    judged_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_verdict ON candidate (verdict);
+CREATE INDEX IF NOT EXISTS idx_candidate_name ON candidate (canonical_name);
+CREATE INDEX IF NOT EXISTS idx_candidate_filed ON candidate (filed_date DESC);
 """
 
 

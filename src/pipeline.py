@@ -13,9 +13,10 @@ from datetime import UTC, date, datetime, timedelta
 
 from pydantic import BaseModel, Field
 
+from src.candidates import save_candidate
 from src.enrich import Enrichment, enrich_filing
 from src.judge import JudgementError, judge_filing
-from src.models import Candidate, FormDFiling
+from src.models import Candidate
 from src.seen import filter_unseen, mark_seen
 from src.thesis import Thesis, apply_filters
 
@@ -137,6 +138,11 @@ def run_radar(
                 website=candidate.website,
                 accession=filing.accession,
             )
+
+            # And the judgement itself is kept, not just the fact of having
+            # looked. Rendering a digest used to be the only place a verdict
+            # existed, so it was gone as soon as the message was sent.
+            save_candidate(connection, candidate)
 
     return RadarRun(
         start_date=start_date,

@@ -62,14 +62,20 @@ def test_send_email_reports_success() -> None:
     assert len(sent) == 1
 
 
-def test_send_email_without_configuration_is_not_a_crash() -> None:
+def test_send_email_without_configuration_is_not_a_crash(monkeypatch) -> None:
     # Absence of email settings is a valid state, not an error.
+    #
+    # load_email_settings is patched rather than left to the environment. Without
+    # this the test passes on a machine with no .env and, on a machine that has
+    # one, silently sends a real email — which it did on the deployment host
+    # before this was fixed. A test must not depend on ambient configuration,
+    # and must never reach the outside world.
+    monkeypatch.setattr("src.delivery.load_email_settings", lambda: None)
+
     ok, message = send_email("digest", "subject", settings=None, send=None)
 
-    # Depending on the environment this either finds no config or fails to
-    # connect; either way it must report rather than raise.
     assert ok is False
-    assert message
+    assert "not configured" in message
 
 
 def test_an_authentication_failure_names_the_likely_cause() -> None:

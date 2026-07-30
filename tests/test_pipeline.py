@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from src.candidates import find_by_company
 from src.enrich import Enrichment
 from src.judge import JudgementError
 from src.models import Candidate, FormDFiling
@@ -134,6 +135,60 @@ def test_everything_judged_is_marked_including_a_rejection(db) -> None:
 
     assert run.interesting == []
     assert count_seen(db) == 1
+
+
+def test_a_run_records_the_judgement_not_just_the_sighting(db) -> None:
+    # The verdict used to exist only inside a rendered digest, so it was gone
+    # the moment the message was sent.
+    run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Genomenon, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge("fits", "AI software for genetic evidence."),
+    )
+
+    history = find_by_company(db, "Genomenon, Inc.")
+
+    assert len(history) == 1
+    assert history[0].verdict == "fits"
+    assert history[0].reason == "AI software for genetic evidence."
+
+
+def test_a_rejection_is_recorded_with_its_reason(db) -> None:
+    # Knowing why something was rejected is the more valuable half.
+    run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Dental Group, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge("no_fit", "A dental practice, not software."),
+    )
+
+    history = find_by_company(db, "Dental Group, Inc.")
+
+    assert len(history) == 1
+    assert history[0].verdict == "no_fit"
+    assert "dental practice" in history[0].reason
+
+
+def test_a_dry_run_records_no_judgement(db) -> None:
+    run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Genomenon, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+        mark=False,
+    )
+
+    assert find_by_company(db, "Genomenon, Inc.") == []
 
 
 def test_a_dry_run_marks_nothing(db) -> None:

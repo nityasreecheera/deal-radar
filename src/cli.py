@@ -8,6 +8,11 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
+from src.candidates import (
+    count_by_verdict,
+    find_by_company,
+    list_candidates,
+)
 from src.delivery import deliver
 from src.digest import render_digest, save_digest
 from src.edgar import fetch_filings
@@ -94,8 +99,70 @@ def command_status(args: argparse.Namespace) -> int:
     """Report how much the index remembers."""
     with closing(connect(Path(args.db) if args.db else None)) as connection:
         total = count_seen(connection)
+        verdicts = count_by_verdict(connection)
 
-    print(json.dumps({"ok": True, "companies_known": total}, indent=2))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "companies_known": total,
+                "judgements": verdicts,
+            },
+            indent=2,
+        )
+    )
+
+    return 0
+
+
+def command_candidates(args: argparse.Namespace) -> int:
+    """List past judgements — what was decided, and why."""
+    with closing(connect(Path(args.db) if args.db else None)) as connection:
+        if args.company:
+            found = find_by_company(connection, args.company)
+        else:
+            found = list_candidates(
+                connection,
+                verdicts=args.verdict,
+                since=args.since,
+                limit=args.limit,
+            )
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "count": len(found),
+                    "candidates": [c.model_dump(mode="json") for c in found],
+                },
+                indent=2,
+            )
+        )
+
+        return 0
+
+    if not found:
+        print("Nothing recorded matches that.")
+
+        return 0
+
+    mark = {"fits": "✓", "maybe": "~", "no_fit": "✗"}
+
+    for item in found:
+        amount = (
+            f"${item.offering_amount:,}"
+            if item.offering_amount is not None
+            else "undisclosed"
+        )
+
+        print(f"{mark[item.verdict]} {item.company_name} · {amount} · {item.filed_date}")
+        print(f"   {item.reason}")
+
+        if item.website:
+            print(f"   {item.website}")
+
+        print()
 
     return 0
 
@@ -153,6 +220,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--db", help="path to the seen-index")
     status_parser.set_defaults(handler=command_status)
+
+    candidates_parser = subparsers.add_parser(
+        "candidates",
+        help="what was decided about past companies, and why",
+    )
+    candidates_parser.add_argument(
+        "--verdict",
+        action="append",
+        choices=["fits", "maybe", "no_fit"],
+        help="only this verdict (repeatable)",
+    )
+    candidates_parser.add_argument(
+        "--company",
+        help="every judgement about one company, by name",
+    )
+    candidates_parser.add_argument(
+        "--since",
+        help="only filings on or after this date, YYYY-MM-DD",
+    )
+    candidates_parser.add_argument("--limit", type=int)
+    candidates_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="machine-readable output",
+    )
+    candidates_parser.add_argument("--db", help="path to the seen-index")
+    candidates_parser.set_defaults(handler=command_candidates)
 
     return parser
 
