@@ -22,7 +22,7 @@ from src.thesis import Thesis, apply_filters
 
 
 # Verdict order for display: the ones an analyst should read first.
-VERDICT_ORDER = {"fits": 0, "maybe": 1, "no_fit": 2}
+VERDICT_ORDER = {"fits": 0, "maybe": 1, "unknown": 2, "no_fit": 3}
 
 
 class DroppedFiling(BaseModel):
@@ -44,6 +44,17 @@ class RadarRun(BaseModel):
     already_seen: int = 0
     candidates: list[Candidate] = Field(default_factory=list)
     problems: list[str] = Field(default_factory=list)
+
+    @property
+    def unknowns(self) -> list[Candidate]:
+        """
+        Companies nobody could establish anything about.
+
+        Kept out of the digest and counted separately. These are a research task,
+        not a judgement to read over coffee, and mixing them in was filling half
+        the list with shrugs.
+        """
+        return [c for c in self.candidates if c.verdict == "unknown"]
 
     @property
     def interesting(self) -> list[Candidate]:

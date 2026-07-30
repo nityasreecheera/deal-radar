@@ -2,6 +2,7 @@ import pytest
 
 from src.enrich import Enrichment
 from src.judge import (
+    SYSTEM_PROMPT,
     JudgementError,
     build_prompt,
     judge_filing,
@@ -184,3 +185,53 @@ def test_judge_filing_propagates_a_bad_answer() -> None:
 
     with pytest.raises(JudgementError):
         judge_filing(filing(), Enrichment(), thesis(), judge=fake_judge)
+
+
+def test_unknown_is_a_verdict_and_is_not_interesting() -> None:
+    # "unknown" means nobody established what the company does. That is a
+    # research task, not a judgement to read over coffee, so it stays out of the
+    # digest even though it is not a rejection.
+    judgement = parse_judgement(
+        '{"verdict": "unknown", "reason": "Placeholder site only.",'
+        ' "summary": null}'
+    )
+
+    assert judgement.verdict == "unknown"
+    assert judgement.is_interesting is False
+    assert judgement.summary is None
+
+
+def test_the_prompt_distinguishes_maybe_from_unknown() -> None:
+    # Collapsing them is what filled twelve of twenty maybes with shrugs.
+    assert "maybe" in SYSTEM_PROMPT
+    assert "unknown" in SYSTEM_PROMPT
+    assert "a maybe is worth" in SYSTEM_PROMPT
+
+
+def test_the_prompt_asks_for_a_summary_separate_from_the_reason() -> None:
+    assert "summary describes the business" in SYSTEM_PROMPT
+    assert "Do not merge them" in SYSTEM_PROMPT
+
+
+def test_a_summary_is_carried_onto_the_candidate() -> None:
+    def fake_judge(system: str, user: str) -> str:
+        return (
+            '{"verdict": "fits", "reason": "Clinical trial software.",'
+            ' "summary": "Matches patients to oncology trials."}'
+        )
+
+    candidate = judge_filing(
+        filing(), Enrichment(), thesis(), judge=fake_judge
+    )
+
+    assert candidate.summary == "Matches patients to oncology trials."
+    # The reason explains the verdict; the summary describes the business.
+    assert candidate.reason != candidate.summary
+
+
+def test_a_missing_summary_is_allowed() -> None:
+    judgement = parse_judgement(
+        '{"verdict": "unknown", "reason": "No evidence at all."}'
+    )
+
+    assert judgement.summary is None

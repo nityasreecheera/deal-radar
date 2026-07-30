@@ -20,12 +20,15 @@ import {
 const ACCENT: Record<string, string> = {
   fits: "bg-[var(--color-fits)]",
   maybe: "bg-[var(--color-maybe)]",
+  // Unknown gets no accent. It is not a judgement, so it should not read as one.
+  unknown: "bg-[var(--color-rule)]",
   no_fit: "bg-[var(--color-nofit)]",
 };
 
 const VERDICT_TEXT: Record<string, string> = {
   fits: "text-[var(--color-fits)]",
   maybe: "text-[var(--color-maybe)]",
+  unknown: "text-[var(--color-ink-faint)]",
   no_fit: "text-[var(--color-ink-faint)]",
 };
 
@@ -120,6 +123,12 @@ export function CandidateRow({
 
       {expanded && (
         <div className="space-y-6 pr-1 pb-6 pl-5">
+          {candidate.summary && (
+            <p className="font-display max-w-2xl text-[1.0625rem] leading-relaxed text-[var(--color-ink)]">
+              {candidate.summary}
+            </p>
+          )}
+
           <p className="max-w-2xl text-[0.9375rem] leading-relaxed text-[var(--color-ink-soft)]">
             {candidate.reason}
           </p>

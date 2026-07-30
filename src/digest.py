@@ -17,7 +17,7 @@ from src.pipeline import RadarRun
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DIGEST_DIR = PROJECT_ROOT / "outputs" / "digests"
 
-VERDICT_MARK = {"fits": "✓", "maybe": "~", "no_fit": "✗"}
+VERDICT_MARK = {"fits": "✓", "maybe": "~", "unknown": "?", "no_fit": "✗"}
 
 
 def format_amount(amount: int | None) -> str:
@@ -53,8 +53,14 @@ def render_entry(index: int, candidate: Candidate) -> list[str]:
         f"{index}. {filing.company_name} · "
         f"{format_amount(filing.total_offering_amount)} · "
         f"{format_location(candidate)}",
-        f"   {mark} {candidate.reason}",
     ]
+
+    # What they do comes before why it was judged that way. The first is what an
+    # analyst is scanning for; the second is the argument.
+    if candidate.summary:
+        lines.append(f"   {candidate.summary}")
+
+    lines.append(f"   {mark} {candidate.reason}")
 
     if filing.is_newly_incorporated:
         # A company raising in the year it was formed is the earliest stage
@@ -95,6 +101,15 @@ def render_digest(run: RadarRun, thesis_name: str) -> str:
 
     if rejected:
         lines.append(f"Judged {len(rejected)} as not a fit.")
+
+    # Named, not listed. Knowing the count matters — it says how much the radar
+    # could not find out — but the names belong on a research list rather than in
+    # a two-minute read.
+    if run.unknowns:
+        lines.append(
+            f"{len(run.unknowns)} could not be identified at all — "
+            "see the unknown list."
+        )
 
     if run.problems:
         lines.append("")

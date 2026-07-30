@@ -76,7 +76,11 @@ CREATE TABLE IF NOT EXISTS candidate (
     investor_count   INTEGER,
     jurisdiction     TEXT,
     entity_type      TEXT,
-    cik              TEXT    -- lets the interface link to the filing itself
+    cik              TEXT,   -- lets the interface link to the filing itself
+
+    -- One line on what the company does. Distinct from `reason`, which explains
+    -- the verdict; a detail view needs the business, not the decision.
+    summary          TEXT
 );
 """
 
@@ -124,6 +128,7 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
         "ALTER TABLE candidate ADD COLUMN entity_type TEXT",
     ),
     ("candidate", "cik", "ALTER TABLE candidate ADD COLUMN cik TEXT"),
+    ("candidate", "summary", "ALTER TABLE candidate ADD COLUMN summary TEXT"),
 )
 
 

@@ -29,6 +29,7 @@ class StoredCandidate(BaseModel):
     company_name: str = Field(min_length=1)
     verdict: FitVerdict
     reason: str = Field(min_length=1)
+    summary: str | None = None
     website: str | None = None
     description: str | None = None
     offering_amount: int | None = None
@@ -113,9 +114,10 @@ def save_candidate(
             accession, canonical_name, company_name, verdict, reason,
             website, description, offering_amount, filed_date,
             industry_group, city, state, incorporated, judged_at, theme,
-            people, amount_sold, investor_count, jurisdiction, entity_type, cik
+            people, amount_sold, investor_count, jurisdiction, entity_type, cik,
+            summary
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (accession) DO UPDATE SET
             verdict         = excluded.verdict,
             reason          = excluded.reason,
@@ -138,7 +140,8 @@ def save_candidate(
             entity_type     = COALESCE(
                 excluded.entity_type, candidate.entity_type
             ),
-            cik             = COALESCE(excluded.cik, candidate.cik)
+            cik             = COALESCE(excluded.cik, candidate.cik),
+            summary         = COALESCE(excluded.summary, candidate.summary)
         """,
         (
             filing.accession,
@@ -162,6 +165,7 @@ def save_candidate(
             filing.jurisdiction,
             filing.entity_type,
             filing.cik,
+            candidate.summary,
         ),
     )
     connection.commit()

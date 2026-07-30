@@ -36,20 +36,30 @@ SYSTEM_PROMPT = """\
 You screen companies against an investment thesis for an analyst.
 
 Decide whether a company fits, using only the evidence provided. Answer with one
-of three verdicts:
+of four verdicts:
 
-  fits    — clearly within the thesis
-  maybe   — plausibly within it, or the evidence is too thin to be sure
-  no_fit  — clearly outside it
+  fits     — clearly within the thesis
+  maybe    — genuinely could go either way on what it does
+  unknown  — the evidence does not say what the company does at all
+  no_fit   — clearly outside it
+
+The distinction between "maybe" and "unknown" matters. Use "maybe" when you know
+roughly what the company does and cannot tell whether it qualifies. Use "unknown"
+when the evidence is absent, a placeholder site, or boilerplate — when you would
+be guessing from the name. An analyst treats those differently: a maybe is worth
+a look, an unknown is worth a search.
 
 Rules that matter more than being decisive:
 
 - Judge what the company does, not whether it sounds impressive.
-- The evidence may be weak or absent. When it is, answer "maybe" and say what is
-  missing. Never infer a business model from a company's name alone.
+- The evidence may be weak or absent. Say what is missing rather than filling the
+  gap, and never infer a business model from a company's name alone.
 - A large raise is not evidence of fit. Neither is a well-known investor.
 - Give one sentence of reasoning. An analyst reads dozens of these, so the
   reason must be specific: name the thing that decided it.
+- Also give a one-line summary of what the company does, in plain terms, or null
+  if the evidence does not say. The summary describes the business; the reason
+  explains the verdict. Do not merge them.
 """
 
 # A judge takes the rendered prompt and returns raw model text.
@@ -65,9 +75,17 @@ class Judgement(BaseModel):
 
     verdict: FitVerdict
     reason: str = Field(min_length=1)
+    summary: str | None = None
 
     @property
     def is_interesting(self) -> bool:
+        """
+        Worth an analyst's attention now.
+
+        "unknown" is deliberately excluded: it means nobody found out what the
+        company does, which is a research task rather than a judgement to read
+        over coffee.
+        """
         return self.verdict in ("fits", "maybe")
 
 
@@ -185,7 +203,9 @@ People named on the filing: {people or "none listed"}
 --- Answer ---
 
 Reply with JSON only:
-{{"verdict": "fits" | "maybe" | "no_fit", "reason": "one specific sentence"}}
+{{"verdict": "fits" | "maybe" | "unknown" | "no_fit",
+  "reason": "one specific sentence explaining the verdict",
+  "summary": "one line on what the company does, or null if unknown"}}
 """
 
 
@@ -233,6 +253,7 @@ def judge_filing(
         filing=filing,
         verdict=judgement.verdict,
         reason=judgement.reason,
+        summary=judgement.summary,
         website=enrichment.website,
         description=enrichment.description,
     )

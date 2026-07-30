@@ -10,17 +10,19 @@ export type CandidateList = Schemas["CandidateList"];
 export type ChatAnswer = Schemas["ChatAnswer"];
 export type Verdict = Candidate["verdict"];
 
-export const VERDICTS: Verdict[] = ["fits", "maybe", "no_fit"];
+export const VERDICTS: Verdict[] = ["fits", "maybe", "unknown", "no_fit"];
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
   fits: "Fits",
   maybe: "Maybe",
+  unknown: "Unknown",
   no_fit: "No fit",
 };
 
 export const VERDICT_MARK: Record<Verdict, string> = {
   fits: "✓",
   maybe: "~",
+  unknown: "?",
   no_fit: "✗",
 };
 

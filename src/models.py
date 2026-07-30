@@ -132,20 +132,30 @@ class SeenCompany(BaseModel):
     accession: str | None = None
 
 
-FitVerdict = Literal["fits", "maybe", "no_fit"]
+# Four verdicts, not three. "maybe" and "unknown" were the same bucket, and in
+# real data twelve of twenty maybes turned out to mean "we could not find out"
+# rather than "this could go either way". Collapsing those fills a digest with
+# shrugs, which is the fastest way to make a daily read stop being read.
+FitVerdict = Literal["fits", "maybe", "unknown", "no_fit"]
 
 
 class Candidate(BaseModel):
     """
     A filing that survived deduplication, once judged against the thesis.
 
-    The verdict and reason come from a model; everything else is from the
-    filing. Keeping them in one object makes it obvious which fields are
+    The verdict, reason and summary come from a model; everything else is from
+    the filing. Keeping them in one object makes it obvious which fields are
     asserted by software and which are an opinion.
     """
 
     filing: FormDFiling
     verdict: FitVerdict
     reason: str = Field(min_length=1)
+
+    # What the company does, in one line. Distinct from `reason`, which explains
+    # the verdict. A detail view needs the former and the digest needs the
+    # latter, and a search snippet is a poor substitute for either.
+    summary: str | None = None
+
     website: str | None = None
     description: str | None = None
