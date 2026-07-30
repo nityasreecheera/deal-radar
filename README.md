@@ -117,12 +117,14 @@ daily  → pull a low-latency source
        → triage into the pipeline in two minutes
 ```
 
-The digest is the product. It arrives in Slack, because a radar you have to
-remember to open is a radar you check twice and then forget.
+The digest is the product. It arrives by email, because a radar you have to
+remember to open is a radar you check twice and then forget. Email rather than
+Slack because it needs a password and nothing else — no workspace, no app, no
+admin approval.
 
 Three surfaces, one job each:
 
-- **Digest (Slack)** — the daily habit. Push, not pull.
+- **Digest (email)** — the daily habit. Push, not pull.
 - **Web** — where you go when something looks worth a closer look, and where you
   triage.
 - **Agent chat** — ad-hoc research and steering, where judgement is needed.
@@ -130,15 +132,46 @@ Three surfaces, one job each:
 A chatbot cannot be the main surface: you cannot ask about a company you do not
 know exists. That is the entire problem being solved.
 
+### Four verdicts
+
+Each company gets one of four, and the fourth exists because of real data rather
+than tidiness.
+
+| Verdict | Meaning | In the digest? |
+|---|---|---|
+| `fits` | clearly within the thesis | yes |
+| `maybe` | the business is known, the fit is arguable | yes |
+| `unknown` | the evidence never said what it does | counted only |
+| `no_fit` | clearly outside it | counted only |
+
+`maybe` and `unknown` began as one bucket. In practice twelve of twenty maybes
+meant "we could not find out" — a placeholder site, boilerplate, nothing at all.
+Reading those as judgements filled half the digest with shrugs, which is the
+fastest way to make a daily read stop being read. An analyst treats them
+differently: a maybe is worth a look, an unknown is worth a search.
+
+Alongside the verdict, the judge writes a **one-line summary of the business**,
+kept separate from its reason. The reason explains the decision; the summary
+describes the company. Conflating them meant the only available description was
+a raw search snippet, which is usually boilerplate.
+
 ## Scope
 
 Starting with **healthcare AI and clinical** — trials, diagnostics, care
 coordination, health data.
 
-That choice is practical, not sentimental: *Health Care* is one of the SEC's own
-Form D industry categories, so filings can be pre-filtered almost for free.
-Most software sectors land in "Technology → Other" and would require enriching
-every filing before knowing whether it is even relevant.
+An early assumption here was wrong and worth recording. *Health Care* is one of
+the SEC's own Form D industry categories, which looked like a free pre-filter.
+It is not: healthcare **software** files under *Technology*. Verified against real
+filings — Ambience Healthcare ($70M), Viz.ai and Nabla all used "Other
+Technology", and the Health Care groups turned out to hold surgical robotics,
+neuromodulation devices, therapeutics, a prescription discount card and a
+residential property in Wayzata, Minnesota.
+
+So the search covers Technology as well, which costs volume — roughly 350 extra
+filings a month against 150 healthcare ones, all of them enriched and judged.
+There is no cheaper shortcut: names like "Abridge" and "Nabla" carry no signal,
+so anything relevant has to be looked up to be found.
 
 **Semiconductors** are tracked differently. Designing silicon costs tens of
 millions, so only a handful of companies start per year worldwide — a daily
@@ -236,14 +269,182 @@ changing shape.
 ## Storage
 
 ```
-data/radar.sqlite        seen-index and candidates
-config/thesis.yaml       fit criteria — the file edited after talking to investors
+data/radar.sqlite        seen-index, and every judgement with its reasoning
+config/*.yaml            one file per domain — the files edited after talking to investors
 outputs/digests/*.md     what was sent, so a digest can be audited later
+outputs/logs/radar.log   what each scheduled run did
+web/.env.local           credentials for publishing (ignored)
 ```
+
+Two tables. `seen_company` answers "have I encountered this company?" and needs to
+do nothing else. `candidate` answers "what did I decide, and why?" — which is the
+question actually asked six months later, and the one that used to be discarded
+the moment a digest was rendered. Keyed on accession rather than company, because
+a company can file more than once and each filing is a separate judgement made on
+separate evidence.
 
 `thesis.yaml` is a plain readable file on purpose. The criteria deciding what you
 see should be something you can open and argue with, not weights buried in a
 prompt.
+
+## Running it
+
+```bash
+python3.11 -m venv .venv          # 3.11 or newer: `str | None` in annotations
+.venv/bin/pip install -r requirements.txt
+
+cp .env.example .env              # then fill in the keys
+```
+
+Keys and what each is for are documented in [.env.example](.env.example). Two are
+required: `TAVILY_API_KEY` for finding out what a company does, and
+`OPENROUTER_API_KEY` for judging fit. Email delivery is optional and needs
+`SMTP_USER` and `SMTP_PASSWORD` — for Gmail that must be an App Password, not the
+account password, which is the one mistake everybody makes.
+
+Port 25 is blocked outbound on Oracle Cloud; 587 and 465 are open, so Gmail over
+STARTTLS works.
+
+### The radar
+
+```bash
+# a run over the default window (3 days, so a Monday catches Friday)
+.venv/bin/python -m src.cli run
+
+# any window, and email it
+.venv/bin/python -m src.cli run --start 2026-06-01 --end 2026-06-15 --send
+
+# rehearse without consuming the novelty of everything it looks at
+.venv/bin/python -m src.cli run --dry-run
+
+# what has been decided, and why
+.venv/bin/python -m src.cli candidates --verdict fits
+.venv/bin/python -m src.cli candidates --company Genomenon
+.venv/bin/python -m src.cli status
+```
+
+Any date range is safe to re-run. Deduplication is exact, so overlapping windows
+cost nothing but a "skipped" line.
+
+### On a schedule
+
+```
+MAILTO=""
+RADAR_SEND=1
+0 13 * * 1-5 /home/opc/deal-radar/scripts/daily.sh
+```
+
+Weekdays at 13:00 UTC, weekdays only because EDGAR does not publish at weekends.
+Delivery is opt-in through `RADAR_SEND` so a missing mail credential cannot fail a
+run whose real work — extending the seen-index — succeeded.
+
+### The web interface
+
+```bash
+./scripts/web.sh                  # API on 8100, site on 3100
+```
+
+Then from your own machine:
+
+```bash
+ssh -L 3100:localhost:3100 oci
+```
+
+Ports 3100 and 8100 rather than 3000 and 8000, so this does not collide with
+anything else on the same host.
+
+The page has a domain dropdown, date pickers bounded to the filings actually on
+record, verdict filters, an unread-only toggle, and a question box. Read rows grey
+out and lose their accent; unread rows keep it. The contrast is the point — the
+eye should find the unread ones without reading a word.
+
+Expanding a row shows the business summary, the website, officers and directors
+with their roles and locations, funding raised against sold, investor count,
+incorporation year, entity type, jurisdiction, and a link to the filing itself so
+any claim can be checked at source.
+
+### Publishing it
+
+```bash
+printf 'SHARE_USER=review\nSHARE_PASSWORD=...\n' > web/.env.local
+./scripts/share.sh
+```
+
+Serves the production build through a Cloudflare quick tunnel. No security-list
+change and no open port — cloudflared dials outward.
+
+The password is not optional and the script refuses to publish without one:
+`/api/chat` spends money per request and `/api/viewed` writes, so an ungated URL
+is someone else's ability to run up a bill. `share.sh` verifies the site answers
+401 before opening the tunnel rather than assuming the gate works. The chat is
+also capped at sixty questions an hour, which turns a runaway into a refusal.
+
+The URL is temporary and different every run.
+
+## Layout
+
+| Module | Does |
+|---|---|
+| [src/edgar.py](src/edgar.py) | EDGAR search and Form D parsing; the fetcher is injectable so tests stay offline |
+| [src/normalize.py](src/normalize.py) | company identity — canonical domain, normalised name |
+| [src/seen.py](src/seen.py) | the seen-index, the schema, and in-place migration |
+| [src/thesis.py](src/thesis.py) | what counts as interesting, and the free filters applied first |
+| [src/enrich.py](src/enrich.py) | what a company actually does, since a filing never says |
+| [src/judge.py](src/judge.py) | the one step where a model forms an opinion |
+| [src/candidates.py](src/candidates.py) | every judgement and its reasoning, queryable |
+| [src/pipeline.py](src/pipeline.py) | the run, and the ordering rules that make it safe |
+| [src/digest.py](src/digest.py) | the message that gets read |
+| [src/delivery.py](src/delivery.py) | email over SMTP, or Slack through the agent |
+| [src/chat.py](src/chat.py) | answering questions from stored judgements, with no tools |
+| [src/api.py](src/api.py) | HTTP for the interface; read-mostly |
+| [src/cli.py](src/cli.py) | the command surface |
+| [web/](web/) | the reading interface — Next.js, types generated from the API schema |
+
+Frontend types come from the OpenAPI schema, so `src/models.py` is the single
+source of truth and there is no second definition to drift:
+
+```bash
+cd web && npm run gen:types      # needs the API running
+```
+
+That has caught real bugs. A Pydantic field with a `default_factory` is not
+"required" in the schema, so every list arrives typed as possibly-undefined and
+the compiler rejects unguarded use. And a `@property` on a Pydantic model is
+**not serialised**, so `is_unread` and `filing_url` never reach the browser and
+are derived client-side instead.
+
+## Scripts
+
+| Script | For |
+|---|---|
+| `scripts/daily.sh` | one run, for cron; logs the digest and its own commentary |
+| `scripts/web.sh` | API and site locally, in tmux |
+| `scripts/share.sh` | production build behind a password, on a public URL |
+| `scripts/diagnose.py` | every company with its evidence and the reason it was judged |
+| `scripts/backfill_detail.py` | re-fetch filing detail for rows saved before it was stored |
+| `scripts/rejudge.py` | re-judge stored rows after the prompt or verdict set changes |
+
+`diagnose.py` earns its place: a radar that rejects everything is
+indistinguishable from a broken one unless the reasoning is visible. The first
+live run rejected all six companies — correctly, as it turned out, but that was
+only checkable by reading the reasons.
+
+`rejudge.py` matters whenever the prompt changes, because stored rows keep
+verdicts reached under the old rules. It re-enriches as well as re-judging: a
+verdict reached on absent evidence deserves another look at the evidence rather
+than a relabelling.
+
+## Schema changes
+
+The database is migrated in place on every connect. `CREATE TABLE IF NOT EXISTS`
+does nothing to a table that already exists, so new columns are added explicitly
+in `MIGRATIONS` or a deployed database silently lacks them.
+
+Order matters and is easy to get wrong: **tables, then columns, then indexes**. An
+index on a column migration has not yet added cannot be created, so a single
+schema script fails on any database older than its newest column. The migration
+tests build a deliberately old-shaped database for exactly this reason — a fresh
+one would pass happily and hide the bug.
 
 ## Deliberate non-goals
 
@@ -261,60 +462,67 @@ prompt.
 
 ## Status
 
-The pipeline runs end to end against live EDGAR. A real digest from a two-day
-window:
+Runs end to end against live EDGAR, on a schedule, delivering by email, with a
+web interface behind a password. **207 tests, none of which touch the network.**
+
+Over 1 June to 17 July 2026 — 202 companies seen:
 
 ```
-Deal Radar · 2 new · Healthcare AI and clinical software · 2026-07-29
-
-1. Qualified Health PBC · $25M · San Carlos, CA
-   ✓ An enterprise AI platform for health systems is clinical software
-     applying machine learning to healthcare workflows.
-
-2. ImmuNovus, Inc. · $5M · Denton, NE
-   ~ Digital twin technologies could be computational drug discovery software
-     (in scope) or primarily therapeutic development (out of scope), but the
-     evidence doesn't specify whether the platform or a molecule is the asset.
-
-Skipped 7 filings — already seen or filtered out.
-Judged 8 as not a fit.
+fits 5   ·   maybe 1   ·   unknown 15   ·   no_fit 116
 ```
 
-108 tests, none of which touch the network.
+The five fits, all found from raw filings:
 
-### What real filings changed
+| Company | Raise | What it does |
+|---|---|---|
+| Proxima Bio | $91.5M | AI drug discovery, proximity-based therapeutics |
+| MemryHealth | $3M | EHR for post-acute care, documentation automation |
+| Pretura Health | $2.5M | emergency department workflow coordination |
+| PeriOp Ortho | $1.6M | orthopedic surgery care coordination |
+| 1104Health | undisclosed | oncologist collaboration and trial software |
 
-Four things were wrong in the design above, and only real data showed it.
+### What real data changed
 
-**The healthcare industry filter excluded healthcare software.** Filtering on the
-SEC's Health Care groups looked free and correct. Ambience Healthcare, Viz.ai and
-Nabla all filed under *Other Technology*. The Health Care groups turned out to
-contain surgical robotics, neuromodulation hardware, a prescription discount
-card, a caregiver service, cell-factor therapeutics, and a house in Wayzata,
-Minnesota.
+Six things were wrong in the design above, and only real filings showed it.
+
+**The healthcare industry filter excluded healthcare software.** Covered under
+Scope. The single most consequential error here — the free pre-filter was
+filtering out the target.
 
 **A $39 offering exists.** Hence a floor.
 
 **But rejecting filings with no disclosed amount was worse.** Form D permits
-indefinite offerings, and that rule silently dropped three real companies in a
-single ten-day window. Absence of an amount is not evidence of a nominal raise,
-and for a radar a missed company is the one failure that cannot be tolerated.
+indefinite offerings, and that rule silently dropped three real companies in one
+ten-day window. Absence of an amount is not evidence of a nominal raise, and for
+a radar a missed company is the one failure that cannot be tolerated.
+
+**Half the maybes were not maybes.** Twelve of twenty meant "we could not find
+out". Hence the fourth verdict.
+
+**Enrichment was reading legal boilerplate.** Search returns whichever page
+matched a company name, which is very often the privacy policy or the leadership
+team — pages on the right domain that describe nothing. Preferring the shallowest
+non-boilerplate URL turned unresolvable shrugs into decisions: PreventiveMD moved
+from its terms page to its homepage, revealing a GLP-1 telehealth service, which
+is a clean rejection rather than a maybe.
 
 **An `ElementTree` element with no children is falsey**, so `find_element(...) or
-fallback` silently takes the fallback even on success. Present twice, passing on
-the sample filing by luck.
+fallback` silently takes the fallback even on success, and `if offering` treats an
+empty `<offeringData/>` as missing. Present twice, passing on the sample filing by
+luck.
 
 ### Still to do
 
-- Deliver the digest to Slack on a schedule
-- The web reading surface, and the read-only chat over saved research
 - Chip-sector market map
+- Slack as an alternative to email — wired, not credentialed
+- Automated monitoring beyond a fixed daily window
 
-**And the thing that decides whether ranking is real or decorative:** the thesis
-is still a placeholder. Fit criteria live in `config/thesis.yaml`, currently a
-reasonable guess. What belongs there is a real mandate — stage, geography, cheque
-size, and what kills a company in thirty seconds. That comes from talking to
-investors, not from writing more code.
+**And the thing that decides whether any of this is real:** the thesis is still a
+placeholder. Fit criteria live in `config/thesis.yaml`, currently a reasonable
+guess. What belongs there is a real mandate — stage, geography, cheque size, and
+what kills a company in thirty seconds. That comes from talking to investors, not
+from writing more code. Every verdict above was measured against criteria nobody
+in the industry has reviewed.
 
 Building on [investment-research-copilot](https://github.com/nityasreecheera/investment-research-copilot),
 which already contributes the parts that matter here: deduplication by canonical
