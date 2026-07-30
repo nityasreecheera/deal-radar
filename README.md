@@ -7,28 +7,17 @@ It is not a search tool and not a database. It is a filter with a memory.
 
 ## The problem it solves
 
-An investment analyst is not short of information. They are drowning in it. The
-things that actually hurt are these:
+Analysts are not short of information. They are drowning in it. The parts that
+actually hurt are the dull ones:
 
-1. **Remembering, not finding.** *"I saw a company like this eight months ago —
-   who was it?"* The notes are in email, in a CRM nobody updates, in someone's
-   head.
-2. **Screening is repetitive but still needs judgement.** Every new company needs
-   the same lookups: what do they do, what stage, where, who runs it, is this even
-   in our box. Twenty to forty minutes, and nine times out of ten the answer is no.
-3. **Spotting who is about to be interesting.** This is the actual craft, and the
-   hardest thing to systematise.
-4. **Nobody wrote the mandate down.** Everyone "knows" what the fund invests in,
-   but not in a form you can apply, so screening quality depends on who happens to
-   be doing it.
-5. **The reasoning disappears.** Passing on a company is the most information-rich
-   moment in the job. Six months later it raises at 5× and nobody remembers why
-   the answer was no.
-6. **Nobody knows where the relationship stands.** Have we spoken to them? Who?
-   When? What did we say?
+- *"I saw a company like this eight months ago — who was it?"* The notes are in
+  email, in a CRM nobody updates, in someone's head.
+- Passing on a company is the most information-rich moment in the job, and the
+  reasoning evaporates. Six months later it raises at 5× and nobody remembers why.
+- Every new company needs the same twenty minutes of lookups, and nine times out
+  of ten the answer is no.
 
-Problems 1, 5 and 6 are the dullest and the least solved. That is where this
-starts.
+Nobody builds for those, because they are boring. That is where this starts.
 
 ## Why not just use Crunchbase
 
