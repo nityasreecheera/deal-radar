@@ -5,38 +5,68 @@ import { useState } from "react";
 import { formatAmount, type FundingRound } from "@/lib/api";
 
 /**
- * Raises over time.
+ * Round size over time.
  *
- * Bars, not a line. A line implies the company sat at some value between rounds,
- * and it did not — a raise is a discrete event. Time runs left to right so the
- * shape reads as a sequence rather than a ranking.
+ * A line, because the question is a trajectory — are the raises getting bigger?
+ * Markers sit on every actual filing so the discrete events stay visible; the
+ * line carries direction, the dots carry "this is a real data point".
  *
- * Each bar is one round. Full height is what they asked for; the filled part is
- * what actually sold. That puts "how big" and "how much of it closed" in one
- * mark instead of two charts.
+ * Two decisions that matter more than they look:
  *
- * Monochrome on purpose. There are no categories here, only a portion of a
- * whole, so there is nothing for colour to identify and nothing to confuse.
+ * The value plotted is the round's *target*, not the amount sold. A round that
+ * has just opened has sold nothing, and plotting that would draw the line
+ * collapsing to zero — an artifact of timing, not a fall in the company's
+ * fortunes.
+ *
+ * Amendments are excluded. An amendment restates a round that is already on the
+ * chart, so drawing it would invent a raise that never happened. They stay in
+ * the list underneath, where they are labelled as what they are.
+ *
+ * Monochrome: one series, so there is nothing for colour to identify.
  */
 
-const HEIGHT = 96;
-const BAR_WIDTH = 44;
-const GAP = 10;
-const LABEL_SPACE = 20;
+const HEIGHT = 110;
+const PAD_X = 12;
+const PAD_TOP = 14;
+const LABEL_SPACE = 22;
+const MIN_WIDTH = 220;
 
 export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
-  // One bar is not a chart. The caller says "first raise" in words instead.
-  if (rounds.length < 2) return null;
+  const points = rounds.filter((round) => {
+    if (round.is_amendment) return false;
 
-  const amounts = rounds.map((r) =>
-    Math.max(r.offering_amount ?? 0, r.amount_sold ?? 0),
+    // A round with no amount disclosed is not a round of zero. Plotting it as
+    // one draws the line collapsing to the floor, which reads as the company
+    // falling apart — 1104Health raised $1M in 2023 and filed an undisclosed
+    // amount in 2026, and that would have rendered as a crash. Leave it out of
+    // the line; the list underneath still shows the filing.
+    return (round.offering_amount ?? round.amount_sold ?? 0) > 0;
+  });
+
+  // One point is not a trend. The caller says "first raise" in words instead.
+  if (points.length < 2) return null;
+
+  const values = points.map(
+    (round) => round.offering_amount ?? round.amount_sold ?? 0,
   );
-  const ceiling = Math.max(...amounts, 1);
+  const ceiling = Math.max(...values, 1);
 
-  const width = rounds.length * BAR_WIDTH + (rounds.length - 1) * GAP;
-  const active = hovered === null ? null : rounds[hovered];
+  const width = Math.max(MIN_WIDTH, points.length * 90);
+  const plotWidth = width - PAD_X * 2;
+  const plotHeight = HEIGHT - PAD_TOP;
+
+  const coords = values.map((value, index) => ({
+    x: PAD_X + (plotWidth * index) / (points.length - 1),
+    y: PAD_TOP + plotHeight - (value / ceiling) * plotHeight,
+  }));
+
+  const path = coords
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+
+  const active = hovered === null ? null : points[hovered];
 
   return (
     <figure className="m-0">
@@ -45,10 +75,11 @@ export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
         width={width}
         height={HEIGHT + LABEL_SPACE}
         role="img"
-        aria-label={`Funding history: ${rounds.length} filings`}
+        aria-label={`Round size across ${points.length} raises`}
         className="overflow-visible"
       >
-        {/* Baseline. Recessive on purpose — it orients, it does not decorate. */}
+        {/* Baseline only. A full grid would be more furniture than data for
+            three points. */}
         <line
           x1={0}
           y1={HEIGHT}
@@ -58,62 +89,49 @@ export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
           strokeWidth={1}
         />
 
-        {rounds.map((round, index) => {
-          const target = round.offering_amount ?? 0;
-          const sold = round.amount_sold ?? 0;
+        <path
+          d={path}
+          fill="none"
+          stroke="var(--color-ink)"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
 
-          const x = index * (BAR_WIDTH + GAP);
-          const targetHeight = (target / ceiling) * HEIGHT;
-          const soldHeight = (sold / ceiling) * HEIGHT;
-
-          const dim = hovered !== null && hovered !== index;
+        {coords.map((point, index) => {
+          const round = points[index];
+          const isActive = hovered === index;
 
           return (
             <g
               key={round.accession}
               onMouseEnter={() => setHovered(index)}
               onMouseLeave={() => setHovered(null)}
-              opacity={dim ? 0.4 : 1}
-              className="transition-opacity"
             >
-              {/* Generous hit target, larger than the mark itself. */}
+              {/* Hit target far larger than the dot. */}
               <rect
-                x={x - GAP / 2}
+                x={point.x - width / (points.length * 2)}
                 y={0}
-                width={BAR_WIDTH + GAP}
+                width={width / points.length}
                 height={HEIGHT + LABEL_SPACE}
                 fill="transparent"
               />
 
-              {/* What they asked for. */}
-              <rect
-                x={x}
-                y={HEIGHT - targetHeight}
-                width={BAR_WIDTH}
-                height={Math.max(targetHeight, 1)}
-                rx={3}
-                fill="var(--color-rule)"
+              {/* A ring in the surface colour so the marker stays legible
+                  where the line passes behind it. */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={isActive ? 6 : 4.5}
+                fill="var(--color-ink)"
+                stroke="var(--color-paper)"
+                strokeWidth={2}
+                className="transition-all"
               />
 
-              {/* What actually sold, anchored to the baseline. */}
-              {soldHeight > 0 && (
-                <rect
-                  x={x}
-                  y={HEIGHT - soldHeight}
-                  width={BAR_WIDTH}
-                  height={Math.max(soldHeight, 2)}
-                  rx={3}
-                  fill={
-                    round.is_amendment
-                      ? "var(--color-ink-faint)"
-                      : "var(--color-ink)"
-                  }
-                />
-              )}
-
               <text
-                x={x + BAR_WIDTH / 2}
-                y={HEIGHT + 14}
+                x={point.x}
+                y={HEIGHT + 15}
                 textAnchor="middle"
                 fontSize={10}
                 fill="var(--color-ink-faint)"
@@ -123,31 +141,44 @@ export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
             </g>
           );
         })}
+
+        {/* Only the first and last are labelled. A number on every point is
+            noise when the caption gives the exact figure on hover. */}
+        {[0, coords.length - 1].map((index) => (
+          <text
+            key={index}
+            x={coords[index].x}
+            y={coords[index].y - 11}
+            textAnchor={index === 0 ? "start" : "end"}
+            fontSize={10}
+            fill="var(--color-ink-soft)"
+          >
+            {formatAmount(values[index])}
+          </text>
+        ))}
       </svg>
 
-      {/* A caption rather than a floating tooltip. The chart is small, the
-          detail is long, and a box covering two of four bars helps nobody. */}
-      <figcaption className="mt-2 min-h-[1.25rem] text-[0.8125rem] text-[var(--color-ink-soft)]">
+      <figcaption className="mt-1 min-h-[1.25rem] text-[0.8125rem] text-[var(--color-ink-soft)]">
         {active ? (
           <>
             <span className="tabular">{active.filed_date}</span>
-            {" · "}
-            <span className="tabular">
-              {formatAmount(active.amount_sold)}
-            </span>{" "}
-            sold of{" "}
+            {" · raising "}
             <span className="tabular">
               {formatAmount(active.offering_amount)}
             </span>
-            {active.is_amendment && (
+            {active.amount_sold != null && (
               <span className="text-[var(--color-ink-faint)]">
-                {" · amends an earlier filing"}
+                {" · "}
+                <span className="tabular">
+                  {formatAmount(active.amount_sold)}
+                </span>{" "}
+                sold
               </span>
             )}
           </>
         ) : (
           <span className="text-[var(--color-ink-faint)]">
-            Filled shows what sold. Hover a bar for detail.
+            Round size over time. Hover a point for detail.
           </span>
         )}
       </figcaption>
