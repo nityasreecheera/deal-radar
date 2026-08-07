@@ -12,6 +12,7 @@ from src.pipeline import DroppedFiling, RadarRun
 
 def candidate(
     name: str = "Acme Health, Inc.",
+    sold: int | None = None,
     verdict: str = "fits",
     reason: str = "Clinical trial software.",
     amount: int | None = 4_200_000,
@@ -26,6 +27,7 @@ def candidate(
         "city": "BOSTON",
         "state": "MA",
         "total_offering_amount": amount,
+        "total_amount_sold": sold,
     }
     data.update(filing_overrides)
 
@@ -180,3 +182,34 @@ def test_save_digest_leaves_no_temporary_file(tmp_path: Path) -> None:
     save_digest("x", run(), output_directory=tmp_path)
 
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_the_email_says_how_far_through_the_raise_they_are() -> None:
+    # The line that changes what you do rather than just describing: a round
+    # that has already sold out is not one you can join.
+    run = RadarRun(
+        start_date="2026-07-26",
+        end_date="2026-07-29",
+        generated_at="2026-07-29T00:00:00+00:00",
+        candidates=[
+            candidate("Nearly Closed Inc.", amount=2_000_000, sold=1_699_999),
+        ],
+    )
+
+    rendered = render_digest(run, "Healthcare")
+
+    assert "85% sold" in rendered
+    assert "nearly closed" in rendered
+
+
+def test_the_email_omits_progress_when_nothing_is_disclosed() -> None:
+    run = RadarRun(
+        start_date="2026-07-26",
+        end_date="2026-07-29",
+        generated_at="2026-07-29T00:00:00+00:00",
+        candidates=[candidate("Quiet Co", amount=2_000_000, sold=None)],
+    )
+
+    rendered = render_digest(run, "Healthcare")
+
+    assert "% sold" not in rendered

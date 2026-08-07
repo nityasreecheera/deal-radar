@@ -87,6 +87,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/candidates/{accession}/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Detail
+         * @description One company, with its history and connections.
+         */
+        get: operations["get_detail_api_candidates__accession__detail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Connected People
+         * @description People appearing on more than one company we have seen.
+         *
+         *     Only sees our own collection: EDGAR does not index the names on a Form D, so
+         *     this cannot search all filings. It gets more useful as the database grows.
+         */
+        get: operations["get_connected_people_api_people_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/companies/{name}": {
         parameters: {
             query?: never;
@@ -251,6 +294,43 @@ export interface components {
             accessions?: string[];
         };
         /**
+         * CompanyDetail
+         * @description Everything worth knowing about one company, in one request.
+         *
+         *     The judgement, its funding history, how far through the raise it was, and
+         *     anyone on the filing who also turns up elsewhere. Assembled here rather than
+         *     left to three round trips, because the page shows them together.
+         */
+        CompanyDetail: {
+            candidate: components["schemas"]["StoredCandidate"];
+            /** Rounds */
+            rounds?: components["schemas"]["FundingRound"][];
+            /**
+             * Funding Summary
+             * @default
+             */
+            funding_summary: string;
+            /**
+             * Is First Raise
+             * @default true
+             */
+            is_first_raise: boolean;
+            /**
+             * Total Raised
+             * @default 0
+             */
+            total_raised: number;
+            /** Progress Percent */
+            progress_percent?: number | null;
+            /**
+             * Progress Note
+             * @default
+             */
+            progress_note: string;
+            /** Shared People */
+            shared_people?: components["schemas"]["PersonLink"][];
+        };
+        /**
          * DigestBody
          * @description One saved digest, as it was sent.
          */
@@ -269,6 +349,27 @@ export interface components {
             ok: boolean;
             /** Errors */
             errors?: string[];
+        };
+        /**
+         * FundingRound
+         * @description One raise, as filed.
+         */
+        FundingRound: {
+            /** Accession */
+            accession: string;
+            /** Cik */
+            cik: string;
+            /** Filed Date */
+            filed_date: string;
+            /** Offering Amount */
+            offering_amount?: number | null;
+            /** Amount Sold */
+            amount_sold?: number | null;
+            /**
+             * Is Amendment
+             * @default false
+             */
+            is_amendment: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -306,6 +407,18 @@ export interface components {
             thesis_name?: string | null;
             /** Digest Dates */
             digest_dates?: string[];
+        };
+        /**
+         * PersonLink
+         * @description Someone who appears on more than one company we have seen.
+         */
+        PersonLink: {
+            /** Full Name */
+            full_name: string;
+            /** Relationships */
+            relationships?: string[];
+            /** Other Companies */
+            other_companies?: string[];
         };
         /**
          * Question
@@ -525,6 +638,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_detail_api_candidates__accession__detail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accession: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_connected_people_api_people_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
             /** @description Validation Error */

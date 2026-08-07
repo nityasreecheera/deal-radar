@@ -31,6 +31,8 @@ from src.candidates import (
     mark_viewed,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
+from src.funding import FundingRound, load_history, round_progress
+from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
 from src.thesis import ThesisError, available_themes, load_thesis
 
@@ -78,6 +80,25 @@ class CandidateList(BaseModel):
     count: int = Field(ge=0)
     unread: int = Field(ge=0)
     candidates: list[StoredCandidate] = Field(default_factory=list)
+
+
+class CompanyDetail(BaseModel):
+    """
+    Everything worth knowing about one company, in one request.
+
+    The judgement, its funding history, how far through the raise it was, and
+    anyone on the filing who also turns up elsewhere. Assembled here rather than
+    left to three round trips, because the page shows them together.
+    """
+
+    candidate: StoredCandidate
+    rounds: list[FundingRound] = Field(default_factory=list)
+    funding_summary: str = ""
+    is_first_raise: bool = True
+    total_raised: int = 0
+    progress_percent: int | None = None
+    progress_note: str = ""
+    shared_people: list[PersonLink] = Field(default_factory=list)
 
 
 class MarkedRead(BaseModel):
@@ -233,6 +254,52 @@ def get_one(accession: str) -> StoredCandidate:
         )
 
     return found
+
+
+@app.get(
+    "/api/candidates/{accession}/detail",
+    response_model=CompanyDetail,
+    responses={404: {"model": ErrorBody}},
+)
+def get_detail(accession: str) -> CompanyDetail:
+    """One company, with its history and connections."""
+    with closing(connect()) as connection:
+        found = get_candidate(connection, accession)
+
+        if found is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"ok": False, "errors": [f"no judgement for '{accession}'"]},
+            )
+
+        history = load_history(connection, found.cik) if found.cik else None
+        percent, note = round_progress(found.offering_amount, found.amount_sold)
+
+        return CompanyDetail(
+            candidate=found,
+            rounds=history.rounds if history else [],
+            funding_summary=history.describe() if history else "",
+            is_first_raise=history.is_first_time if history else True,
+            total_raised=history.total_raised if history else 0,
+            progress_percent=percent,
+            progress_note=note,
+            shared_people=shared_people(connection, accession),
+        )
+
+
+@app.get("/api/people", response_model=list[dict])
+def get_connected_people(limit: int = Query(default=20, ge=1, le=100)) -> list[dict]:
+    """
+    People appearing on more than one company we have seen.
+
+    Only sees our own collection: EDGAR does not index the names on a Form D, so
+    this cannot search all filings. It gets more useful as the database grows.
+    """
+    with closing(connect()) as connection:
+        return [
+            {"full_name": name, "companies": count}
+            for name, count in most_connected(connection, limit=limit)
+        ]
 
 
 @app.get("/api/companies/{name}", response_model=list[StoredCandidate])

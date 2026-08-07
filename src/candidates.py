@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pydantic import BaseModel, Field, field_validator
 
 from src.models import Candidate, FitVerdict, RelatedPerson
+from src.people import save_people
 
 
 class StoredCandidate(BaseModel):
@@ -169,6 +170,10 @@ def save_candidate(
         ),
     )
     connection.commit()
+
+    # Also as rows, so "who else is this person on?" is a join rather than a
+    # scan over every JSON blob in the table.
+    save_people(connection, filing.accession, filing.related_persons)
 
     stored = get_candidate(connection, filing.accession)
 

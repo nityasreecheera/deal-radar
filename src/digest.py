@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.funding import round_progress
 from src.models import Candidate
 from src.pipeline import RadarRun
 
@@ -66,6 +67,16 @@ def render_entry(index: int, candidate: Candidate) -> list[str]:
         # A company raising in the year it was formed is the earliest stage
         # there is, and worth calling out explicitly.
         lines.append(f"   incorporated {filing.year_of_incorporation}")
+
+    # How far through the raise they were. This is the line that changes what
+    # you do about a company rather than merely describing it: a round that has
+    # already sold out is not one you can join.
+    percent, note = round_progress(
+        filing.total_offering_amount, filing.total_amount_sold
+    )
+
+    if percent is not None:
+        lines.append(f"   {percent}% sold — {note.replace(' when filed', '')}")
 
     if candidate.website:
         lines.append(f"   {candidate.website}")

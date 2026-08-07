@@ -401,3 +401,100 @@ def test_a_refused_question_does_not_consume_allowance(
 
     assert client.post("/api/chat", json={"question": "x" * 501}).status_code == 422
     assert client.post("/api/chat", json={"question": "hi?"}).status_code == 200
+
+
+def test_detail_includes_funding_history_and_progress(isolated: Path) -> None:
+    from src.funding import FundingHistory, FundingRound, save_history
+
+    seed(candidate(amount=2_000_000))
+
+    with connect() as connection:
+        connection.execute(
+            "UPDATE candidate SET cik = '1234567', amount_sold = 1699999"
+        )
+        connection.commit()
+
+        save_history(
+            connection,
+            FundingHistory(
+                cik="1234567",
+                rounds=[
+                    FundingRound(
+                        accession="old",
+                        cik="1234567",
+                        filed_date="2023-07-20",
+                        offering_amount=1_000_000,
+                        amount_sold=1_000_000,
+                    ),
+                    FundingRound(
+                        accession="acc-1",
+                        cik="1234567",
+                        filed_date="2026-07-30",
+                        offering_amount=2_000_000,
+                        amount_sold=1_699_999,
+                    ),
+                ],
+            ),
+        )
+
+    body = client.get("/api/candidates/acc-1/detail").json()
+
+    assert len(body["rounds"]) == 2
+    assert body["is_first_raise"] is False
+    assert "2 raises on record" in body["funding_summary"]
+    # The real PreventiveMD ratio.
+    assert body["progress_percent"] == 85
+    assert "nearly closed" in body["progress_note"]
+
+
+def test_detail_of_a_company_with_no_history(isolated: Path) -> None:
+    seed(candidate())
+
+    body = client.get("/api/candidates/acc-1/detail").json()
+
+    # No history stored is not an error, and a lone company is a first raise.
+    assert body["rounds"] == []
+    assert body["is_first_raise"] is True
+    assert body["shared_people"] == []
+
+
+def test_detail_of_an_unknown_company_is_404() -> None:
+    assert client.get("/api/candidates/nope/detail").status_code == 404
+
+
+def test_detail_reports_shared_people(isolated: Path) -> None:
+    from src.models import RelatedPerson
+
+    shared = [RelatedPerson(first_name="Kenneth", last_name="Gall")]
+
+    for accession, name in (("acc-1", "Huxley Medical"), ("acc-2", "Protect3d")):
+        item = candidate(name=name, accession=accession)
+        item.filing.related_persons = shared
+        seed(item)
+
+    body = client.get("/api/candidates/acc-1/detail").json()
+
+    assert len(body["shared_people"]) == 1
+    assert body["shared_people"][0]["full_name"] == "Kenneth Gall"
+    assert body["shared_people"][0]["other_companies"] == ["Protect3d"]
+
+
+def test_people_endpoint_lists_only_repeat_appearances(isolated: Path) -> None:
+    from src.models import RelatedPerson
+
+    for accession, name in (("acc-1", "A Inc"), ("acc-2", "B Inc")):
+        item = candidate(name=name, accession=accession)
+        item.filing.related_persons = [
+            RelatedPerson(first_name="Kenneth", last_name="Gall")
+        ]
+        seed(item)
+
+    solo = candidate(name="C Inc", accession="acc-3")
+    solo.filing.related_persons = [
+        RelatedPerson(first_name="Solo", last_name="Founder")
+    ]
+    seed(solo)
+
+    body = client.get("/api/people").json()
+
+    assert body == [{"full_name": "Kenneth Gall", "companies": 2}]

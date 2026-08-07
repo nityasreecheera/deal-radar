@@ -82,6 +82,37 @@ CREATE TABLE IF NOT EXISTS candidate (
     -- the verdict; a detail view needs the business, not the decision.
     summary          TEXT
 );
+
+-- People named on filings, one row each.
+--
+-- These are stored as a JSON blob on the candidate too, which is fine for
+-- displaying one company. This table exists for the opposite question: given a
+-- person, which other companies are they on? That needs a join, and a join needs
+-- rows.
+CREATE TABLE IF NOT EXISTS person (
+    accession     TEXT NOT NULL,
+    name_key      TEXT NOT NULL,   -- lowercased, punctuation stripped
+    full_name     TEXT NOT NULL,
+    relationships TEXT,            -- comma separated, as filed
+    city          TEXT,
+    state         TEXT,
+    PRIMARY KEY (accession, name_key)
+);
+
+-- Every Form D a company has ever filed, not only the ones this radar caught.
+--
+-- EDGAR knows a company's whole filing history, so a company that raised in 2023
+-- and again now can be told apart from one raising for the first time. Those look
+-- identical in a single filing and are completely different companies.
+CREATE TABLE IF NOT EXISTS funding_round (
+    accession       TEXT PRIMARY KEY,
+    cik             TEXT NOT NULL,
+    filed_date      TEXT NOT NULL,
+    offering_amount INTEGER,
+    amount_sold     INTEGER,
+    is_amendment    INTEGER NOT NULL DEFAULT 0,
+    fetched_at      TEXT NOT NULL
+);
 """
 
 SCHEMA_INDEXES = """
@@ -96,6 +127,9 @@ CREATE INDEX IF NOT EXISTS idx_candidate_name ON candidate (canonical_name);
 CREATE INDEX IF NOT EXISTS idx_candidate_filed ON candidate (filed_date DESC);
 CREATE INDEX IF NOT EXISTS idx_candidate_theme ON candidate (theme);
 CREATE INDEX IF NOT EXISTS idx_candidate_viewed ON candidate (viewed_at);
+
+CREATE INDEX IF NOT EXISTS idx_person_name ON person (name_key);
+CREATE INDEX IF NOT EXISTS idx_funding_cik ON funding_round (cik, filed_date);
 """
 
 

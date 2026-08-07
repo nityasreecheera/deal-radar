@@ -14,6 +14,7 @@ from datetime import UTC, date, datetime, timedelta
 from pydantic import BaseModel, Field
 
 from src.candidates import save_candidate
+from src.funding import fetch_history, save_history
 from src.enrich import Enrichment, enrich_filing
 from src.judge import JudgementError, judge_filing
 from src.models import Candidate
@@ -157,6 +158,17 @@ def run_radar(
             # The domain goes with it: the same company can fit one domain and
             # not another, so a verdict without it is ambiguous.
             save_candidate(connection, candidate, theme=thesis.domain)
+
+            # Funding history, but only for companies worth reading about. It is
+            # free, but it is still one request per filing, and there is no point
+            # spending them on the rejections nobody opens.
+            if candidate.verdict != "no_fit" and filing.cik:
+                try:
+                    save_history(connection, fetch_history(filing.cik))
+                except Exception as exc:  # noqa: BLE001
+                    problems.append(
+                        f"{filing.company_name}: funding history failed ({exc})"
+                    )
 
     return RadarRun(
         start_date=start_date,

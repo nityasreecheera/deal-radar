@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { CompanyDetail } from "@/components/CompanyDetail";
 import {
   VERDICT_LABEL,
   filingUrl,
@@ -208,6 +209,8 @@ export function CandidateRow({
               {candidate.description}
             </p>
           )}
+
+          <CompanyDetail accession={candidate.accession} />
 
           <div className="flex flex-wrap items-center gap-5 text-[0.75rem] text-[var(--color-ink-faint)]">
             {candidate.industry_group && <span>{candidate.industry_group}</span>}
