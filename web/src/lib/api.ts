@@ -127,7 +127,14 @@ export function isUnread(candidate: Candidate): boolean {
 }
 
 /**
- * Link to the filing on EDGAR.
+ * Link to the filing on EDGAR, as a human reads it.
+ *
+ * Points at EDGAR's rendered view, not `primary_doc.xml`. The raw XML is what
+ * this project parses, but a browser strips the tags and lays the whole filing
+ * out as one unbroken paragraph of names, addresses, booleans and bare numbers
+ * — unreadable, and worse than no link because it looks broken. The
+ * `xslFormDX01` path is the same document run through EDGAR's own stylesheet
+ * and comes back as the actual Form D, with labelled fields.
  *
  * Built here rather than read from the API for the same reason as isUnread: the
  * Python model exposes it as a property, and Pydantic does not serialise
@@ -138,8 +145,9 @@ export function filingUrl(candidate: Candidate): string | null {
 
   const cik = String(Number(candidate.cik));
   const accession = candidate.accession.replace(/-/g, "");
+  const base = `https://www.sec.gov/Archives/edgar/data/${cik}/${accession}`;
 
-  return `https://www.sec.gov/Archives/edgar/data/${cik}/${accession}/primary_doc.xml`;
+  return `${base}/xslFormDX01/primary_doc.xml`;
 }
 
 /**

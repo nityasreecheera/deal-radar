@@ -119,7 +119,7 @@ export function CompanyProfile({ candidate }: { candidate: Candidate }) {
             rel="noreferrer"
             className="border-b border-[var(--color-rule)] pb-0.5 transition-colors hover:border-[var(--color-ink-faint)] hover:text-[var(--color-ink-soft)]"
           >
-            the SEC filing
+            the filing on SEC.gov
           </a>
         )}
       </div>
