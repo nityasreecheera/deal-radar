@@ -43,8 +43,12 @@ def main() -> int:
             """
             SELECT accession, company_name, cik, filed_date
             FROM candidate
+            -- Any missing piece, not all of them. Requiring both to be
+            -- absent means a row that got one field on an earlier run is
+            -- skipped forever, which is how a re-run filled 10 rows instead
+            -- of 300.
             WHERE people IS NULL OR people = '' OR people = '[]'
-               OR (first_sale_date IS NULL AND minimum_investment IS NULL)
+               OR first_sale_date IS NULL
             ORDER BY filed_date DESC
             LIMIT ?
             """,
