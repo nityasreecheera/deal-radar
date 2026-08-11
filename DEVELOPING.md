@@ -37,7 +37,7 @@ CRON, weekdays — nothing has to be running
 ```
 
 Steps 1–3 and 6 are ordinary code with no model anywhere near them, which is why
-all 248 tests run offline. Step 5 is the one place something forms an opinion, and
+all 258 tests run offline. Step 5 is the one place something forms an opinion, and
 whatever it returns gets schema-validated before anything is written. If the model
 returns nonsense the run records a problem and moves on. It never guesses a verdict
 and never marks that company as seen, so tomorrow gets another attempt.

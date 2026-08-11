@@ -153,7 +153,7 @@ problem.
 ## Where it honestly stands
 
 It runs end to end against live filings, on a schedule, and emails the result.
-248 tests, none of which touch the network.
+258 tests, none of which touch the network.
 
 **The thesis is still a placeholder.** The criteria it currently judges against are
 a reasonable guess and nothing more — healthcare AI and clinical software, with a
