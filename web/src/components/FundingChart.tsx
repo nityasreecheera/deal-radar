@@ -18,9 +18,10 @@ import { formatAmount, type FundingRound } from "@/lib/api";
  * collapsing to zero — an artifact of timing, not a fall in the company's
  * fortunes.
  *
- * Amendments are excluded. An amendment restates a round that is already on the
- * chart, so drawing it would invent a raise that never happened. They stay in
- * the list underneath, where they are labelled as what they are.
+ * Amendments are drawn, but hollow and on a dashed approach. An amendment is the
+ * same round restated rather than a second raise, so it must not read as one —
+ * but when a company amends upward that is real movement, and hiding it both
+ * understates the round and loses the fact that it filled.
  *
  * Monochrome: one series, so there is nothing for colour to identify.
  */
@@ -34,9 +35,14 @@ const MIN_WIDTH = 220;
 export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
+  // Amendments are plotted, but drawn differently.
+  //
+  // An amendment is the same round restated, not a second raise, so it must not
+  // read as one. But when a company amends *upward* that is real movement worth
+  // seeing: Proxima Bio opened at $88.5M and amended to $91.5M, and hiding the
+  // second figure both understates the round and loses the fact that it filled.
+  // So the point is drawn hollow with a dashed approach — same round, new number.
   const points = rounds.filter((round) => {
-    if (round.is_amendment) return false;
-
     // A round with no amount disclosed is not a round of zero. Plotting it as
     // one draws the line collapsing to the floor, which reads as the company
     // falling apart — 1104Health raised $1M in 2023 and filed an undisclosed
@@ -62,9 +68,13 @@ export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
     y: PAD_TOP + plotHeight - (value / ceiling) * plotHeight,
   }));
 
-  const path = coords
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
+  // One segment per gap, so the approach to an amendment can be dashed while
+  // the rest of the line stays solid.
+  const segments = coords.slice(1).map((point, index) => ({
+    from: coords[index],
+    to: point,
+    dashed: Boolean(points[index + 1].is_amendment),
+  }));
 
   const active = hovered === null ? null : points[hovered];
 
@@ -89,14 +99,19 @@ export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
           strokeWidth={1}
         />
 
-        <path
-          d={path}
-          fill="none"
-          stroke="var(--color-ink)"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {segments.map((segment, index) => (
+          <line
+            key={index}
+            x1={segment.from.x}
+            y1={segment.from.y}
+            x2={segment.to.x}
+            y2={segment.to.y}
+            stroke="var(--color-ink)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeDasharray={segment.dashed ? "3 3" : undefined}
+          />
+        ))}
 
         {coords.map((point, index) => {
           const round = points[index];
@@ -123,8 +138,12 @@ export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
                 cx={point.x}
                 cy={point.y}
                 r={isActive ? 6 : 4.5}
-                fill="var(--color-ink)"
-                stroke="var(--color-paper)"
+                fill={
+                  round.is_amendment
+                    ? "var(--color-paper)"
+                    : "var(--color-ink)"
+                }
+                stroke="var(--color-ink)"
                 strokeWidth={2}
                 className="transition-all"
               />
@@ -178,7 +197,10 @@ export function FundingChart({ rounds }: { rounds: FundingRound[] }) {
           </>
         ) : (
           <span className="text-[var(--color-ink-faint)]">
-            Round size over time. Hover a point for detail.
+            Round size over time.
+            {points.some((round) => round.is_amendment)
+              ? " Hollow points are amendments — the same round, restated."
+              : " Hover a point for detail."}
           </span>
         )}
       </figcaption>

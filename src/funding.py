@@ -71,6 +71,32 @@ class FundingHistory(BaseModel):
         """Whether this company has never raised before."""
         return len([r for r in self.rounds if not r.is_amendment]) <= 1
 
+    @property
+    def amended_upward(self) -> tuple[int, int] | None:
+        """
+        Whether the most recent round grew after it was first filed.
+
+        A company that opens at one number and amends to a higher one raised
+        more than it set out to, which is worth saying. Proxima Bio opened at
+        $88.5m and amended to $91.5m, and reporting only the original both
+        understates the round and hides that it filled.
+
+        Returns (original, amended) or None.
+        """
+        originals = [r for r in self.rounds if not r.is_amendment]
+        amendments = [r for r in self.rounds if r.is_amendment]
+
+        if not originals or not amendments:
+            return None
+
+        first = originals[-1].offering_amount
+        last = amendments[-1].offering_amount
+
+        if first is None or last is None or last <= first:
+            return None
+
+        return first, last
+
     def describe(self) -> str:
         """A plain sentence for a human, rather than a chart to interpret."""
         real = [r for r in self.rounds if not r.is_amendment]
@@ -78,16 +104,28 @@ class FundingHistory(BaseModel):
         if not real:
             return "No filing history found."
 
+        grew = self.amended_upward
+
         if len(real) == 1:
-            return f"First raise on record, filed {real[0].filed_date}."
+            opened = f"First raise on record, opened {real[0].filed_date}"
+
+            if grew:
+                return (
+                    f"{opened} at ${grew[0]:,}, later amended up to ${grew[1]:,}."
+                )
+
+            return f"{opened}."
 
         span = f"{real[0].year} to {real[-1].year}"
         total = self.total_raised
 
-        return (
-            f"{len(real)} raises on record, {span}"
-            + (f", ${total:,} sold in total." if total else ".")
-        )
+        sentence = f"{len(real)} raises on record, {span}"
+        sentence += f", ${total:,} sold in total." if total else "."
+
+        if grew:
+            sentence += f" The latest was amended up to ${grew[1]:,}."
+
+        return sentence
 
 
 def submissions_url(cik: str) -> str:

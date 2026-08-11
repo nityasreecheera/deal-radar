@@ -280,3 +280,71 @@ def test_round_progress_with_nothing_sold() -> None:
 
     assert percent == 0
     assert "nothing sold" in wording
+
+
+def test_an_upward_amendment_is_reported() -> None:
+    # Proxima Bio opened at $88.5m and amended to $91.5m. Reporting only the
+    # original understates the round and hides that it filled.
+    history = FundingHistory(
+        cik="1",
+        rounds=[
+            FundingRound(
+                accession="a",
+                cik="1",
+                filed_date="2026-01-21",
+                offering_amount=88_500_025,
+                amount_sold=86_264_999,
+            ),
+            FundingRound(
+                accession="b",
+                cik="1",
+                filed_date="2026-06-10",
+                offering_amount=91_454_999,
+                amount_sold=91_454_999,
+                is_amendment=True,
+            ),
+        ],
+    )
+
+    assert history.amended_upward == (88_500_025, 91_454_999)
+
+    described = history.describe()
+
+    assert "$88,500,025" in described
+    assert "amended up to $91,454,999" in described
+    # Still one round, not two.
+    assert history.is_first_time is True
+
+
+def test_an_amendment_that_does_not_raise_the_amount_is_not_reported() -> None:
+    history = FundingHistory(
+        cik="1",
+        rounds=[
+            FundingRound(
+                accession="a", cik="1", filed_date="2026-01-01",
+                offering_amount=5_000_000,
+            ),
+            FundingRound(
+                accession="b", cik="1", filed_date="2026-06-01",
+                offering_amount=5_000_000, is_amendment=True,
+            ),
+        ],
+    )
+
+    assert history.amended_upward is None
+    assert "amended" not in history.describe()
+
+
+def test_no_amendment_means_nothing_to_report() -> None:
+    history = FundingHistory(
+        cik="1",
+        rounds=[
+            FundingRound(
+                accession="a", cik="1", filed_date="2026-01-01",
+                offering_amount=5_000_000,
+            )
+        ],
+    )
+
+    assert history.amended_upward is None
+    assert history.describe() == "First raise on record, opened 2026-01-01."
