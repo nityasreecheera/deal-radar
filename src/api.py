@@ -34,7 +34,13 @@ from src.candidates import (
     record_decision,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
-from src.funding import FundingRound, load_history, round_progress
+from src.funding import (
+    FundingRound,
+    describe_minimum,
+    load_history,
+    round_age,
+    round_progress,
+)
 from src.models import FitVerdict
 from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
@@ -102,6 +108,16 @@ class CompanyDetail(BaseModel):
     total_raised: int = 0
     progress_percent: int | None = None
     progress_note: str = ""
+
+    # How old the round was when it was filed. The filing date says when the
+    # paperwork arrived; this says when money first moved, and the two can be a
+    # year apart.
+    days_open: int | None = None
+    age_note: str = ""
+
+    # Who the round is built for, from the smallest cheque it will accept.
+    minimum_note: str | None = None
+
     shared_people: list[PersonLink] = Field(default_factory=list)
 
 
@@ -279,8 +295,13 @@ def get_detail(accession: str) -> CompanyDetail:
         history = load_history(connection, found.cik) if found.cik else None
         percent, note = round_progress(found.offering_amount, found.amount_sold)
 
+        days, age = round_age(found.first_sale_date, found.filed_date)
+
         return CompanyDetail(
             candidate=found,
+            days_open=days,
+            age_note=age,
+            minimum_note=describe_minimum(found.minimum_investment),
             rounds=history.rounds if history else [],
             funding_summary=history.describe() if history else "",
             is_first_raise=history.is_first_time if history else True,

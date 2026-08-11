@@ -487,3 +487,61 @@ def test_a_clean_search_reports_full_coverage() -> None:
 
     assert outcome.unsearched == []
     assert outcome.is_complete is True
+
+
+def test_the_minimum_cheque_and_first_sale_are_parsed() -> None:
+    xml = """<?xml version="1.0"?>
+<edgarSubmission>
+  <primaryIssuer>
+    <cik>0001234567</cik>
+    <entityName>Acme Health, Inc.</entityName>
+  </primaryIssuer>
+  <offeringData>
+    <industryGroup><industryGroupType>Other Health Care</industryGroupType></industryGroup>
+    <minimumInvestmentAccepted>50000</minimumInvestmentAccepted>
+    <typeOfFiling>
+      <newOrAmendment><isAmendment>false</isAmendment></newOrAmendment>
+      <dateOfFirstSale><value>2026-08-03</value></dateOfFirstSale>
+    </typeOfFiling>
+  </offeringData>
+</edgarSubmission>"""
+
+    filing = parse_form_d(xml, "acc-1", "2026-08-10")
+
+    assert filing.minimum_investment == 50_000
+    # Nested under typeOfFiling AND inside <value>. I originally guessed the
+    # flat path, wrote the fixture to match the guess, and shipped a parser that
+    # returned None for every real filing while the test stayed green. The
+    # fixture below is the shape EDGAR actually serves.
+    assert filing.first_sale_date == "2026-08-03"
+
+
+def test_a_filing_without_those_fields_still_parses() -> None:
+    xml = """<?xml version="1.0"?>
+<edgarSubmission>
+  <primaryIssuer>
+    <cik>1</cik><entityName>Quiet Co</entityName>
+  </primaryIssuer>
+  <offeringData>
+    <industryGroup><industryGroupType>Other Health Care</industryGroupType></industryGroup>
+  </offeringData>
+</edgarSubmission>"""
+
+    filing = parse_form_d(xml, "acc-2", "2026-08-10")
+
+    assert filing.minimum_investment is None
+    assert filing.first_sale_date is None
+
+
+def test_a_rate_limit_is_retried_and_waits_longer(monkeypatch) -> None:
+    # 429 is the SEC saying "slow down". Giving up is exactly wrong, and
+    # retrying on the ordinary schedule just earns another one.
+    Client, calls = fake_client([FakeResponse(429), FakeResponse(200, "ok")])
+    monkeypatch.setattr(httpx, "Client", Client)
+
+    slept: list[float] = []
+
+    assert create_fetcher(sleep=slept.append)("https://x") == "ok"
+    assert len(calls) == 2
+    # The rate-limit schedule, not the 1s server-hiccup one.
+    assert slept == [5.0]

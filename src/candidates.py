@@ -59,6 +59,8 @@ class StoredCandidate(BaseModel):
     people: list[RelatedPerson] = Field(default_factory=list)
     amount_sold: int | None = None
     investor_count: int | None = None
+    minimum_investment: int | None = None
+    first_sale_date: str | None = None
     jurisdiction: str | None = None
     entity_type: str | None = None
     cik: str | None = None
@@ -134,9 +136,12 @@ def save_candidate(
             website, description, offering_amount, filed_date,
             industry_group, city, state, incorporated, judged_at, theme,
             people, amount_sold, investor_count, jurisdiction, entity_type, cik,
-            summary
+            summary, minimum_investment, first_sale_date
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?
+        )
         ON CONFLICT (accession) DO UPDATE SET
             verdict         = excluded.verdict,
             reason          = excluded.reason,
@@ -160,7 +165,13 @@ def save_candidate(
                 excluded.entity_type, candidate.entity_type
             ),
             cik             = COALESCE(excluded.cik, candidate.cik),
-            summary         = COALESCE(excluded.summary, candidate.summary)
+            summary         = COALESCE(excluded.summary, candidate.summary),
+            minimum_investment = COALESCE(
+                excluded.minimum_investment, candidate.minimum_investment
+            ),
+            first_sale_date = COALESCE(
+                excluded.first_sale_date, candidate.first_sale_date
+            )
         """,
         (
             filing.accession,
@@ -185,6 +196,8 @@ def save_candidate(
             filing.entity_type,
             filing.cik,
             candidate.summary,
+            filing.minimum_investment,
+            filing.first_sale_date,
         ),
     )
     connection.commit()

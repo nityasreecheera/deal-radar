@@ -10,6 +10,8 @@ from src.funding import (
     fetch_history,
     load_history,
     parse_form_d_accessions,
+    describe_minimum,
+    round_age,
     round_progress,
     save_history,
     submissions_url,
@@ -348,3 +350,61 @@ def test_no_amendment_means_nothing_to_report() -> None:
 
     assert history.amended_upward is None
     assert history.describe() == "First raise on record, opened 2026-01-01."
+
+
+def test_a_round_filed_the_week_it_opened_reads_as_fresh() -> None:
+    # Kairo Health Labs: first sale 3 August, filed 10 August.
+    days, phrase = round_age("2026-08-03", "2026-08-10")
+
+    assert days == 7
+    assert "just opened" in phrase
+
+
+def test_a_year_old_round_is_not_a_new_one() -> None:
+    # The whole point. Synthesis Health filed in August 2026 having taken its
+    # first money in July 2025, and arrived looking exactly as new as Kairo.
+    days, phrase = round_age("2025-07-25", "2026-08-05")
+
+    assert days == 376
+    assert "over a year" in phrase
+
+
+def test_round_age_in_weeks_and_months() -> None:
+    assert "weeks" in round_age("2026-07-23", "2026-08-07")[1]
+    assert "months" in round_age("2026-02-01", "2026-08-01")[1]
+
+
+def test_an_undisclosed_first_sale_says_so_rather_than_guessing() -> None:
+    days, phrase = round_age(None, "2026-08-10")
+
+    assert days is None
+    assert "not disclosed" in phrase
+
+
+def test_a_first_sale_after_the_filing_is_not_negative_days() -> None:
+    # A round that has not opened yet. Reporting "-20 days open" is nonsense.
+    days, phrase = round_age("2026-09-01", "2026-08-10")
+
+    assert days is None
+    assert "had not opened" in phrase
+
+
+def test_an_unparseable_date_does_not_crash_a_run() -> None:
+    assert round_age("not a date", "2026-08-10")[0] is None
+
+
+def test_the_minimum_cheque_says_who_the_round_is_for() -> None:
+    assert "friends and family" in describe_minimum(5_000)
+    assert "angel" in describe_minimum(50_000)
+    assert "institutional" in describe_minimum(250_000)
+
+
+def test_no_stated_minimum_is_not_a_minimum_of_zero() -> None:
+    # Rendering 0 as "$0 minimum" reads as a number the company chose.
+    assert describe_minimum(0) is None
+    assert describe_minimum(None) is None
+
+
+def test_a_token_minimum_reads_as_a_closed_allocation() -> None:
+    # Proxima Bio filed a $1 minimum on a $91m round.
+    assert "allocation likely settled" in describe_minimum(1)

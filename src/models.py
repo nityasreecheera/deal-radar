@@ -68,6 +68,16 @@ class FormDFiling(BaseModel):
     total_amount_sold: int | None = Field(default=None, ge=0)
     investor_count: int | None = Field(default=None, ge=0)
 
+    # The smallest cheque the company will take. Says who the round is built
+    # for in one number: a $1,000 floor is friends and family, $50,000 is
+    # angels, $250,000 is institutions only.
+    minimum_investment: int | None = Field(default=None, ge=0)
+
+    # When money first moved, which is not the filing date. A round can be
+    # filed a year after it opened, and until you compare the two every
+    # company in the digest looks equally new.
+    first_sale_date: str | None = None
+
     is_amendment: bool = False
     related_persons: list[RelatedPerson] = Field(default_factory=list)
 

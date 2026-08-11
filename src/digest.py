@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.funding import round_progress
+from src.funding import describe_minimum, round_age, round_progress
 from src.models import Candidate
 from src.pipeline import RadarRun
 
@@ -77,6 +77,21 @@ def render_entry(index: int, candidate: Candidate) -> list[str]:
 
     if percent is not None:
         lines.append(f"   {percent}% sold — {note.replace(' when filed', '')}")
+
+    # How old the deal actually is. Without this every company in the list looks
+    # equally new, because the filing date is when the paperwork arrived rather
+    # than when the round opened. Only said when it is not obvious — a round
+    # filed the week it opened needs no comment.
+    days, age = round_age(filing.first_sale_date, filing.filed_date)
+
+    if days is not None and days > 14:
+        lines.append(f"   first money in {filing.first_sale_date} — {age}")
+
+    # Who the round is built for, in one number.
+    minimum = describe_minimum(filing.minimum_investment)
+
+    if minimum:
+        lines.append(f"   {minimum}")
 
     if candidate.website:
         lines.append(f"   {candidate.website}")

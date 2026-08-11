@@ -42,11 +42,18 @@ SEARCH_PAGE_SIZE = 10
 # have come back with 500 on every category and then worked by hand minutes
 # later. These are worth retrying because the request was fine; the server
 # wasn't.
-RETRY_STATUSES = frozenset({500, 502, 503, 504})
+# 429 is the SEC saying "slow down", which is the clearest possible signal that
+# waiting will work — and the one status where giving up immediately is exactly
+# wrong. A backfill walking hundreds of filings will hit this.
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 # Four attempts over about twelve seconds. Long enough to ride out a blip,
 # short enough that seven categories failing can't stretch a run past its hour.
 RETRY_BACKOFF_SECONDS = (1.0, 3.0, 8.0)
+
+# Being told to slow down deserves a longer pause than a server hiccup, and
+# retrying a rate limit on the same schedule just earns another one.
+RATE_LIMIT_BACKOFF_SECONDS = (5.0, 15.0, 30.0)
 
 # A fetcher takes a URL and returns the response body. Injectable so that every
 # test runs offline.
@@ -102,19 +109,26 @@ def create_fetcher(
         except httpx.HTTPStatusError as exc:
             error = EdgarError(f"EDGAR returned {response.status_code} for {url}")
             error.retryable = response.status_code in RETRY_STATUSES  # type: ignore[attr-defined]
+            error.rate_limited = response.status_code == 429  # type: ignore[attr-defined]
             raise error from exc
 
         return response.text
 
     def fetch(url: str) -> str:
-        for delay in RETRY_BACKOFF_SECONDS:
+        for index in range(len(RETRY_BACKOFF_SECONDS)):
             try:
                 return attempt(url)
             except EdgarError as exc:
                 if not getattr(exc, "retryable", False):
                     raise
 
-                wait(delay)
+                schedule = (
+                    RATE_LIMIT_BACKOFF_SECONDS
+                    if getattr(exc, "rate_limited", False)
+                    else RETRY_BACKOFF_SECONDS
+                )
+
+                wait(schedule[index])
 
         # Last attempt: whatever it raises is what the caller sees, so a run
         # that genuinely couldn't reach EDGAR still reports why.
@@ -373,6 +387,20 @@ def parse_form_d(
         else None
     )
 
+    minimum = (
+        find_text(offering, ["minimumInvestmentAccepted"])
+        if offering is not None
+        else None
+    )
+
+    # Nested under typeOfFiling, not directly under offeringData, and wrapped
+    # in <value>. Absent entirely when the round has not opened.
+    first_sale = (
+        find_text(offering, ["typeOfFiling", "dateOfFirstSale", "value"])
+        if offering is not None
+        else None
+    )
+
     return FormDFiling(
         accession=accession,
         cik=cik,
@@ -403,6 +431,8 @@ def parse_form_d(
             else None
         ),
         investor_count=to_int(investors),
+        minimum_investment=to_int(minimum),
+        first_sale_date=first_sale,
         is_amendment=(amendment or "").lower() == "true",
         related_persons=parse_related_persons(root),
     )

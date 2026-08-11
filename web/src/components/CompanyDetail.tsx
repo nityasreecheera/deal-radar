@@ -78,6 +78,28 @@ export function CompanyDetail({ accession }: { accession: string }) {
                 · {detail.progress_note}
               </span>
             </p>
+
+            {/* How old the deal actually is. A round filed a year after it
+                opened looks identical to a fresh one in the list, and the
+                difference decides whether there is anything left to join. */}
+            {detail.candidate.first_sale_date && (
+              <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
+                First money in{" "}
+                <span className="tabular">
+                  {detail.candidate.first_sale_date}
+                </span>
+                <span className="text-[var(--color-ink-faint)]">
+                  {" · "}
+                  {detail.age_note}
+                </span>
+              </p>
+            )}
+
+            {detail.minimum_note && (
+              <p className="mt-1 text-sm text-[var(--color-ink-faint)]">
+                {detail.minimum_note}
+              </p>
+            )}
           </div>
         </section>
       )}

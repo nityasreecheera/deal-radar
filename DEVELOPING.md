@@ -444,6 +444,12 @@ since a bad User-Agent will still be bad in eight seconds), and any category tha
 can't be reached is named in the email above the fold. Re-running the failed window
 afterwards turned up 48 companies that had been missed, one of which fit.
 
+**`dateOfFirstSale` is nested under `typeOfFiling`, not `offeringData`.** I guessed
+the flat path, wrote the test fixture to match my guess, and shipped a parser that
+returned None for every real filing while the suite stayed green. Fixtures invented
+from an assumption test the assumption, not the document. The fixture is now the
+shape EDGAR actually serves.
+
 **Amendments were being thrown away entirely.** Proxima Bio opened at $88.5M in January
 and amended to $91.5M in June; only the first number was being reported, so the round
 looked smaller than it was and the fact that it filled was invisible. Amendments now plot,
@@ -452,6 +458,8 @@ them so nothing double-counts.
 
 ## Still to do
 
+- `issuerSize/revenueRange` is in every filing and unused. "No Revenues" versus
+  "$1,000,000 - $4,999,999" is a stage signal for free.
 - Slack instead of email — `delivery.py` shells out to `hermes send`, but that path has
   never actually run because Slack was never credentialed. Treat it as untested.
 - Monitoring beyond a fixed daily window.

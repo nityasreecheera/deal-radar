@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Callable
 
 from pydantic import BaseModel, Field
@@ -305,3 +305,80 @@ def round_progress(
         return percent, "just opened when filed"
 
     return 0, "nothing sold yet when filed"
+
+
+def round_age(
+    first_sale_date: str | None,
+    filed_date: str,
+) -> tuple[int | None, str]:
+    """
+    How long a round had been running by the time it was filed.
+
+    This is the difference between the two dates a Form D carries, and it is the
+    one that changes what you do. The filing date says when the paperwork
+    arrived; the first-sale date says when money actually moved. Synthesis Health
+    filed in August 2026 having taken its first money in July 2025 — a round that
+    had been open a year, arriving in the inbox looking exactly as new as one
+    opened last week.
+
+    Returns days open and a phrase, or (None, ...) when there is nothing to
+    compare.
+    """
+    if not first_sale_date:
+        return None, "when it opened is not disclosed"
+
+    try:
+        opened = date.fromisoformat(first_sale_date)
+        filed = date.fromisoformat(filed_date)
+    except ValueError:
+        return None, "when it opened is not disclosed"
+
+    days = (filed - opened).days
+
+    # A sale dated after the filing is a round that has not started. Reporting
+    # that as negative days open would be nonsense.
+    if days < 0:
+        return None, "had not opened when filed"
+
+    if days <= 14:
+        return days, "just opened when filed"
+
+    if days < 60:
+        return days, f"open about {max(days // 7, 2)} weeks when filed"
+
+    months = round(days / 30.44)
+
+    if days < 365:
+        return days, f"open about {months} months when filed"
+
+    years = days / 365.25
+
+    if years < 1.5:
+        return days, "open over a year when filed"
+
+    return days, f"open about {years:.0f} years when filed"
+
+
+def describe_minimum(minimum: int | None) -> str | None:
+    """
+    Who the round is built for, from the smallest cheque it will take.
+
+    Zero and None both mean "no floor stated", which is not the same as a floor
+    of nothing — rendering it as "$0" would read as a number the company chose.
+    """
+    if not minimum:
+        return None
+
+    if minimum <= 1:
+        # A $1 floor on a $91m round, as Proxima Bio filed, is not an open door.
+        # It means the allocation is settled and they are accommodating whoever
+        # is already in.
+        return "no real minimum — allocation likely settled"
+
+    if minimum < 25_000:
+        return f"${minimum:,} minimum — friends and family sized"
+
+    if minimum < 100_000:
+        return f"${minimum:,} minimum — angel sized"
+
+    return f"${minimum:,} minimum — institutional"

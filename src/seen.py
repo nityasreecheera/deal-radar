@@ -175,6 +175,16 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ),
     ("candidate", "user_note", "ALTER TABLE candidate ADD COLUMN user_note TEXT"),
     ("candidate", "decided_at", "ALTER TABLE candidate ADD COLUMN decided_at TEXT"),
+    (
+        "candidate",
+        "minimum_investment",
+        "ALTER TABLE candidate ADD COLUMN minimum_investment INTEGER",
+    ),
+    (
+        "candidate",
+        "first_sale_date",
+        "ALTER TABLE candidate ADD COLUMN first_sale_date TEXT",
+    ),
 )
 
 
