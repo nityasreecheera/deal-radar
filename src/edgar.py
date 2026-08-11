@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 from urllib.parse import urlencode
 from xml.etree import ElementTree
 
@@ -38,6 +38,16 @@ REQUEST_DELAY_SECONDS = 0.2
 
 SEARCH_PAGE_SIZE = 10
 
+# EDGAR's search endpoint fails intermittently under load — whole days of runs
+# have come back with 500 on every category and then worked by hand minutes
+# later. These are worth retrying because the request was fine; the server
+# wasn't.
+RETRY_STATUSES = frozenset({500, 502, 503, 504})
+
+# Four attempts over about twelve seconds. Long enough to ride out a blip,
+# short enough that seven categories failing can't stretch a run past its hour.
+RETRY_BACKOFF_SECONDS = (1.0, 3.0, 8.0)
+
 # A fetcher takes a URL and returns the response body. Injectable so that every
 # test runs offline.
 Fetcher = Callable[[str], str]
@@ -47,20 +57,37 @@ class EdgarError(RuntimeError):
     """Raised when EDGAR cannot be read."""
 
 
-def create_fetcher(user_agent: str | None = None) -> Fetcher:
-    """Build a fetcher that talks to the real EDGAR."""
+def create_fetcher(
+    user_agent: str | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> Fetcher:
+    """
+    Build a fetcher that talks to the real EDGAR, retrying what's worth retrying.
+
+    A 403 means the User-Agent is wrong and will be wrong again in a second, so
+    it fails immediately rather than hammering the SEC four times over. A 5xx or
+    a timeout means the server had a moment, and those get backed off and tried
+    again.
+
+    `sleep` is injectable so the retry tests take microseconds instead of twelve
+    seconds.
+    """
     headers = {
         "User-Agent": user_agent or DEFAULT_USER_AGENT,
         "Accept-Encoding": "gzip, deflate",
     }
 
+    wait = sleep or time.sleep
     client = httpx.Client(headers=headers, timeout=30.0, follow_redirects=True)
 
-    def fetch(url: str) -> str:
+    def attempt(url: str) -> str:
+        """One try. Raises EdgarError, with `retryable` set on the exception."""
         try:
             response = client.get(url)
         except httpx.HTTPError as exc:
-            raise EdgarError(f"could not reach EDGAR: {exc}") from exc
+            error = EdgarError(f"could not reach EDGAR: {exc}")
+            error.retryable = True  # type: ignore[attr-defined]
+            raise error from exc
 
         if response.status_code == 403:
             raise EdgarError(
@@ -68,17 +95,30 @@ def create_fetcher(user_agent: str | None = None) -> Fetcher:
                 "with a contact address."
             )
 
-        # EDGAR's search API returns 500 intermittently, including on deep
-        # pagination. Every transport failure becomes an EdgarError so callers
-        # handle one exception type rather than leaking httpx through the seam.
+        # Every transport failure becomes an EdgarError so callers handle one
+        # exception type rather than leaking httpx through the seam.
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise EdgarError(
-                f"EDGAR returned {response.status_code} for {url}"
-            ) from exc
+            error = EdgarError(f"EDGAR returned {response.status_code} for {url}")
+            error.retryable = response.status_code in RETRY_STATUSES  # type: ignore[attr-defined]
+            raise error from exc
 
         return response.text
+
+    def fetch(url: str) -> str:
+        for delay in RETRY_BACKOFF_SECONDS:
+            try:
+                return attempt(url)
+            except EdgarError as exc:
+                if not getattr(exc, "retryable", False):
+                    raise
+
+                wait(delay)
+
+        # Last attempt: whatever it raises is what the caller sees, so a run
+        # that genuinely couldn't reach EDGAR still reports why.
+        return attempt(url)
 
     return fetch
 
@@ -430,18 +470,39 @@ def search_industry(
     return collected[:max_results], problems
 
 
+class SearchOutcome(NamedTuple):
+    """
+    What a fetch found, and how much of what it was asked for it could see.
+
+    `unsearched` is the part that matters. An empty result set and a failed
+    search are the same two words in an inbox — "nothing new" — and they mean
+    opposite things. One is a quiet day; the other is a day nobody looked.
+    """
+
+    filings: list[FormDFiling]
+    problems: list[str]
+    unsearched: list[str]
+    searched: list[str]
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.unsearched
+
+
 def fetch_filings(
     start_date: str,
     end_date: str,
     industry_groups: list[str] | tuple[str, ...] = SEC_HEALTHCARE_GROUPS,
     fetch: Fetcher | None = None,
     max_per_group: int = 200,
-) -> tuple[list[FormDFiling], list[str]]:
+) -> SearchOutcome:
     """
     Fetch and parse every Form D filed in a date range for the given groups.
 
-    Returns the filings alongside one message per filing that could not be read,
-    so a single malformed document does not lose the whole day's data.
+    Returns the filings, one message per filing that could not be read, and the
+    industry groups that could not be searched at all — so a single malformed
+    document does not lose the whole day's data, and a day where EDGAR was down
+    cannot quietly pass for a day where nothing was filed.
 
     Each industry group is searched separately rather than with one broad query,
     because a filing states exactly one group and precise matching avoids
@@ -450,6 +511,8 @@ def fetch_filings(
     fetcher = fetch or create_fetcher()
 
     problems: list[str] = []
+    unsearched: list[str] = []
+    searched: list[str] = []
     filings: list[FormDFiling] = []
     seen_accessions: set[str] = set()
 
@@ -463,9 +526,12 @@ def fetch_filings(
                 max_results=max_per_group,
             )
             problems.extend(page_problems)
+            searched.append(group)
         except EdgarError as exc:
-            # One unreachable industry group must not lose the other six.
+            # One unreachable industry group must not lose the other six, but it
+            # does mean this category went unread today.
             problems.append(f"search '{group}': {exc}")
+            unsearched.append(group)
             continue
 
         for result in results:
@@ -499,4 +565,4 @@ def fetch_filings(
 
     filings.sort(key=lambda item: item.filed_date, reverse=True)
 
-    return filings, problems
+    return SearchOutcome(filings, problems, unsearched, searched)

@@ -27,7 +27,7 @@ def main() -> int:
 
     thesis = load_thesis()
 
-    filings, problems = fetch_filings(
+    filings, problems, *_ = fetch_filings(
         start, end, industry_groups=thesis.sec_industry_groups, max_per_group=10
     )
     kept, dropped = apply_filters(filings, thesis)

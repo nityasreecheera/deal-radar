@@ -95,7 +95,18 @@ def render_digest(run: RadarRun, thesis_name: str) -> str:
     lines = [header, ""]
 
     if not interesting:
-        lines.append("Nothing new matched the thesis.")
+        # "Nothing new matched" is a finding. It is only true if the radar
+        # actually looked, and on a day EDGAR was down it hasn't. Saying it
+        # anyway is the one lie this thing could tell that would matter.
+        if run.unsearched:
+            lines.append(
+                "Nothing new matched what could be searched — but "
+                f"{len(run.unsearched)} of "
+                f"{len(run.unsearched) + run.searched_count} categories "
+                "could not be reached, so this is not a clear day."
+            )
+        else:
+            lines.append("Nothing new matched the thesis.")
     else:
         for index, candidate in enumerate(interesting, start=1):
             lines.extend(render_entry(index, candidate))
@@ -120,6 +131,19 @@ def render_digest(run: RadarRun, thesis_name: str) -> str:
         lines.append(
             f"{len(run.unknowns)} could not be identified at all — "
             "see the unknown list."
+        )
+
+    # Above the problem list, because a coverage gap is not a footnote —
+    # it changes what the rest of the email means.
+    if run.unsearched:
+        lines.append("")
+        lines.append(
+            f"⚠ Could not search: {', '.join(run.unsearched)}. "
+            "EDGAR was unreachable for these, so anything filed under them "
+            "has not been seen. Nothing was marked as seen either, so a "
+            "successful run still covering this window will pick them up — "
+            "but if this repeats for longer than the window, those days are "
+            "a real gap. Re-run the dates by hand if it does."
         )
 
     if run.problems:

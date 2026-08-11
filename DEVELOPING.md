@@ -370,6 +370,15 @@ quietly takes the fallback even when it found something, and `if offering` treat
 `<offeringData/>` as missing. I'd done this in two places, and both passed on the sample
 filing by luck.
 
+**A failed search looked exactly like a quiet day.** EDGAR's search endpoint 500s
+under load. On 7 and 11 August it failed on every category, and both emails said
+"nothing new matched the thesis" — when nothing had been searched at all. That is the
+one lie this thing could tell that would actually matter, because it is indistinguishable
+from working. Fixed in two parts: 5xx and timeouts now retry with backoff (403 doesn't,
+since a bad User-Agent will still be bad in eight seconds), and any category that still
+can't be reached is named in the email above the fold. Re-running the failed window
+afterwards turned up 48 companies that had been missed, one of which fit.
+
 **Amendments were being thrown away entirely.** Proxima Bio opened at $88.5M in January
 and amended to $91.5M in June; only the first number was being reported, so the round
 looked smaller than it was and the fact that it filled was invisible. Amendments now plot,
@@ -378,9 +387,6 @@ them so nothing double-counts.
 
 ## Still to do
 
-- **SEC's search endpoint returns intermittent 500s**, and a failed search currently
-  degrades to "nothing new" rather than a retry. Some scheduled runs are covering less
-  than they should.
 - Slack instead of email — `delivery.py` shells out to `hermes send`, but that path has
   never actually run because Slack was never credentialed. Treat it as untested.
 - Monitoring beyond a fixed daily window.

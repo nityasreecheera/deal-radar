@@ -46,6 +46,11 @@ class RadarRun(BaseModel):
     candidates: list[Candidate] = Field(default_factory=list)
     problems: list[str] = Field(default_factory=list)
 
+    # Industry groups EDGAR could not be asked about at all. Empty on a
+    # healthy run. When it isn't, "nothing new" is not a finding.
+    unsearched: list[str] = Field(default_factory=list)
+    searched_count: int = 0
+
     @property
     def unknowns(self) -> list[Candidate]:
         """
@@ -113,7 +118,8 @@ def run_radar(
     """
     generated_at = datetime.now(UTC).isoformat()
 
-    filings, problems = fetch_filings(start_date, end_date)
+    found = fetch_filings(start_date, end_date)
+    filings, problems = found.filings, list(found.problems)
 
     kept, dropped = apply_filters(filings, thesis)
     fresh, already_seen = filter_unseen(connection, kept)
@@ -182,4 +188,6 @@ def run_radar(
         already_seen=already_seen,
         candidates=candidates,
         problems=problems,
+        unsearched=list(found.unsearched),
+        searched_count=len(found.searched),
     )

@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 
 from src.edgar import (
     EdgarError,
     build_search_url,
+    create_fetcher,
     fetch_filings,
     filing_xml_url,
     parse_form_d,
@@ -234,7 +236,7 @@ def test_fetch_healthcare_filings_end_to_end_offline() -> None:
 
         return real_filing_xml()
 
-    filings, problems = fetch_filings(
+    filings, problems, *_ = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,
@@ -257,7 +259,7 @@ def test_fetch_records_a_problem_without_losing_the_batch() -> None:
 
         return "<broken"
 
-    filings, problems = fetch_filings(
+    filings, problems, *_ = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,
@@ -284,7 +286,7 @@ def test_fetch_drops_a_filing_whose_stated_group_is_not_healthcare() -> None:
 
         return non_healthcare
 
-    filings, problems = fetch_filings(
+    filings, problems, *_ = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,
@@ -310,7 +312,7 @@ def test_a_failing_later_page_keeps_the_earlier_results() -> None:
 
         return real_filing_xml()
 
-    filings, problems = fetch_filings(
+    filings, problems, *_ = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         industry_groups=("Other Health Care",),
@@ -334,7 +336,7 @@ def test_a_failing_first_page_loses_only_that_group() -> None:
 
         return real_filing_xml()
 
-    filings, problems = fetch_filings(
+    filings, problems, *_ = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         industry_groups=("Biotechnology", "Other Health Care"),
@@ -350,7 +352,7 @@ def test_search_reports_invalid_json() -> None:
     def fake_fetch(url: str) -> str:
         return "not json"
 
-    filings, problems = fetch_filings(
+    filings, problems, *_ = fetch_filings(
         "2026-07-01",
         "2026-07-29",
         fetch=fake_fetch,
@@ -359,3 +361,129 @@ def test_search_reports_invalid_json() -> None:
     assert filings == []
     assert len(problems) == 5
     assert all("invalid JSON" in problem for problem in problems)
+
+
+class FakeResponse:
+    def __init__(self, status_code: int, text: str = "{}") -> None:
+        self.status_code = status_code
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                f"{self.status_code}", request=None, response=None  # type: ignore[arg-type]
+            )
+
+
+def fake_client(responses: list):
+    """A stand-in httpx.Client that hands back canned responses in order."""
+    calls: list[str] = []
+
+    class Client:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        def get(self, url: str):
+            calls.append(url)
+            item = responses[min(len(calls) - 1, len(responses) - 1)]
+
+            if isinstance(item, Exception):
+                raise item
+
+            return item
+
+    return Client, calls
+
+
+def test_a_500_is_retried_and_the_run_survives(monkeypatch) -> None:
+    # The real failure: EDGAR 500s on every category at 13:00 and works fine by
+    # hand ten minutes later. A blip must not cost a day of coverage.
+    Client, calls = fake_client(
+        [FakeResponse(500), FakeResponse(500), FakeResponse(200, '{"ok": 1}')]
+    )
+    monkeypatch.setattr(httpx, "Client", Client)
+
+    slept: list[float] = []
+    fetch = create_fetcher(sleep=slept.append)
+
+    assert fetch("https://efts.sec.gov/x") == '{"ok": 1}'
+    assert len(calls) == 3
+    # Backed off rather than hammering.
+    assert slept == [1.0, 3.0]
+
+
+def test_a_timeout_is_retried(monkeypatch) -> None:
+    Client, calls = fake_client(
+        [httpx.ReadTimeout("slow"), FakeResponse(200, "fine")]
+    )
+    monkeypatch.setattr(httpx, "Client", Client)
+
+    assert create_fetcher(sleep=lambda _: None)("https://x") == "fine"
+    assert len(calls) == 2
+
+
+def test_a_403_is_not_retried(monkeypatch) -> None:
+    # A bad User-Agent will still be bad in eight seconds. Retrying it just
+    # hammers the SEC and buries the one error message that says what to fix.
+    Client, calls = fake_client([FakeResponse(403)])
+    monkeypatch.setattr(httpx, "Client", Client)
+
+    with pytest.raises(EdgarError, match="SEC_USER_AGENT"):
+        create_fetcher(sleep=lambda _: None)("https://x")
+
+    assert len(calls) == 1
+
+
+def test_a_404_is_not_retried(monkeypatch) -> None:
+    Client, calls = fake_client([FakeResponse(404)])
+    monkeypatch.setattr(httpx, "Client", Client)
+
+    with pytest.raises(EdgarError):
+        create_fetcher(sleep=lambda _: None)("https://x")
+
+    assert len(calls) == 1
+
+
+def test_a_500_that_never_recovers_gives_up_and_says_so(monkeypatch) -> None:
+    Client, calls = fake_client([FakeResponse(500)])
+    monkeypatch.setattr(httpx, "Client", Client)
+
+    with pytest.raises(EdgarError, match="500"):
+        create_fetcher(sleep=lambda _: None)("https://x")
+
+    # Four attempts, then it stops rather than retrying forever.
+    assert len(calls) == 4
+
+
+def test_a_category_that_cannot_be_searched_is_reported_as_unsearched() -> None:
+    def fetch(url: str) -> str:
+        if "Health+Care" in url or "Health%20Care" in url:
+            raise EdgarError("EDGAR returned 500")
+
+        return json.dumps({"hits": {"hits": [], "total": {"value": 0}}})
+
+    outcome = fetch_filings(
+        "2026-08-10",
+        "2026-08-11",
+        industry_groups=["Other Health Care", "Other Technology"],
+        fetch=fetch,
+    )
+
+    assert outcome.unsearched == ["Other Health Care"]
+    assert outcome.searched == ["Other Technology"]
+    assert outcome.is_complete is False
+
+
+def test_a_clean_search_reports_full_coverage() -> None:
+    def fetch(url: str) -> str:
+        return json.dumps({"hits": {"hits": [], "total": {"value": 0}}})
+
+    outcome = fetch_filings(
+        "2026-08-10",
+        "2026-08-11",
+        industry_groups=["Other Health Care", "Other Technology"],
+        fetch=fetch,
+    )
+
+    assert outcome.unsearched == []
+    assert outcome.is_complete is True

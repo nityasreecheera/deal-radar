@@ -62,18 +62,19 @@ that matters is the memory and the filter on top, whatever's underneath.
 
 ## What it's found
 
-Running against live SEC filings from 1 June to 10 August 2026:
+Running against live SEC filings from 1 June to 11 August 2026:
 
 ```
-256 companies seen  ·  191 judged
-fits 7   ·   maybe 1   ·   unknown 33   ·   no_fit 150
+304 companies seen  ·  239 judged
+fits 8   ·   maybe 1   ·   unknown 45   ·   no_fit 185
 ```
 
-The seven, all found from raw filings before any of them were announced:
+The eight, all found from raw filings before any of them were announced:
 
 | Company | Raising | What they do |
 |---|---|---|
 | Proxima Bio | $91.5M | AI drug discovery, proximity-based therapeutics |
+| Kairo Health Labs | undisclosed | Testing and validation for healthcare AI models |
 | Synthesis Health | $25.5M | Physician workflow and cloud imaging |
 | Convexity Scientific | $13M | Virtual COPD and respiratory care |
 | MemryHealth | $3M | EHR for post-acute care |
@@ -81,8 +82,8 @@ The seven, all found from raw filings before any of them were announced:
 | PeriOp Ortho | $1.6M | Orthopedic surgery care coordination |
 | 1104Health | undisclosed | Oncologist collaboration and trial software |
 
-The ratio is the point. 191 companies looked at, 7 worth reading about. You saw
-seven.
+The ratio is the point. 239 companies looked at, 8 worth reading about. You saw
+eight.
 
 ## What it costs
 
@@ -164,9 +165,8 @@ what rules a company out in the first thirty seconds. That comes from a conversa
 not from writing more code. It's one config file to change, and it's the change that
 decides whether any of this is useful.
 
-Known rough edges: SEC's search endpoint returns intermittent errors, so some
-scheduled runs cover less than they should. Only one domain is configured. Slack
-delivery exists in the code but has never been run.
+Known rough edges: only one domain is configured, and Slack delivery exists in
+the code but has never been run.
 
 ---
 

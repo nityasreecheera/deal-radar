@@ -213,3 +213,42 @@ def test_the_email_omits_progress_when_nothing_is_disclosed() -> None:
     rendered = render_digest(run, "Healthcare")
 
     assert "% sold" not in rendered
+
+
+def test_a_failed_search_does_not_read_as_a_quiet_day() -> None:
+    # The bug this exists for: on 7 and 11 August the email said "Nothing new
+    # matched the thesis" when EDGAR had 500'd on every category and the radar
+    # had not looked at anything at all.
+    content = render_digest(
+        run(
+            candidates=[],
+            unsearched=["Other Technology", "Other Health Care"],
+            searched_count=3,
+        ),
+        "Healthcare AI",
+    )
+
+    assert "Nothing new matched the thesis." not in content
+    assert "not a clear day" in content
+    assert "2 of 5 categories" in content
+    assert "Could not search: Other Technology, Other Health Care" in content
+
+
+def test_a_genuinely_quiet_day_still_says_so_plainly() -> None:
+    content = render_digest(run(candidates=[]), "Healthcare AI")
+
+    assert "Nothing new matched the thesis." in content
+    assert "not a clear day" not in content
+    assert "Could not search" not in content
+
+
+def test_a_coverage_gap_is_flagged_even_when_companies_were_found() -> None:
+    # Finding two companies is not reassurance that the other categories were
+    # read. The warning has to survive a non-empty digest.
+    content = render_digest(
+        run(unsearched=["Pharmaceuticals"], searched_count=6),
+        "Healthcare AI",
+    )
+
+    assert "Acme Health" in content
+    assert "Could not search: Pharmaceuticals" in content

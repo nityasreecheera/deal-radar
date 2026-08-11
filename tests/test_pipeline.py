@@ -7,6 +7,7 @@ import pytest
 from src.candidates import find_by_company
 from src.enrich import Enrichment
 from src.judge import JudgementError
+from src.edgar import SearchOutcome
 from src.models import Candidate, FormDFiling
 from src.pipeline import default_window, run_radar
 from src.seen import connect, count_seen, mark_seen
@@ -45,9 +46,19 @@ def db(tmp_path: Path):
         yield connection
 
 
-def fetcher(filings: list[FormDFiling], problems: list[str] | None = None):
+def fetcher(
+    filings: list[FormDFiling],
+    problems: list[str] | None = None,
+    unsearched: list[str] | None = None,
+    searched: list[str] | None = None,
+):
     def fetch(start: str, end: str):
-        return filings, list(problems or [])
+        return SearchOutcome(
+            filings,
+            list(problems or []),
+            list(unsearched or []),
+            list(searched or ["Other Health Care"]),
+        )
 
     return fetch
 
