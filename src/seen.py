@@ -163,6 +163,18 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ),
     ("candidate", "cik", "ALTER TABLE candidate ADD COLUMN cik TEXT"),
     ("candidate", "summary", "ALTER TABLE candidate ADD COLUMN summary TEXT"),
+    # The analyst's own call, kept alongside the model's rather than replacing
+    # it. rejudge.py re-runs the model over stored rows, and a human decision
+    # living in `verdict` would be silently overwritten the next time the prompt
+    # changed. Keeping both also makes disagreement measurable, which is the
+    # only real evidence of whether the thesis is any good.
+    (
+        "candidate",
+        "user_verdict",
+        "ALTER TABLE candidate ADD COLUMN user_verdict TEXT",
+    ),
+    ("candidate", "user_note", "ALTER TABLE candidate ADD COLUMN user_note TEXT"),
+    ("candidate", "decided_at", "ALTER TABLE candidate ADD COLUMN decided_at TEXT"),
 )
 
 

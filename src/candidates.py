@@ -16,7 +16,7 @@ import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from src.models import Candidate, FitVerdict, RelatedPerson
 from src.people import save_people
@@ -48,6 +48,12 @@ class StoredCandidate(BaseModel):
     # Null means nobody has read it yet.
     viewed_at: str | None = None
 
+    # The analyst's own call, overriding the model's. Null means they have not
+    # disagreed — not that they agreed.
+    user_verdict: FitVerdict | None = None
+    user_note: str | None = None
+    decided_at: str | None = None
+
     # Detail from the filing. Officers and directors are the most useful part:
     # a director based far from the company is often the investor's board seat.
     people: list[RelatedPerson] = Field(default_factory=list)
@@ -56,6 +62,18 @@ class StoredCandidate(BaseModel):
     jurisdiction: str | None = None
     entity_type: str | None = None
     cik: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def effective_verdict(self) -> FitVerdict:
+        """What this company counts as. The human's call wins."""
+        return self.user_verdict or self.verdict
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def overridden(self) -> bool:
+        """Whether the analyst disagreed with the model. Worth surfacing."""
+        return self.user_verdict is not None and self.user_verdict != self.verdict
 
     @field_validator("people", mode="before")
     @classmethod
@@ -247,8 +265,11 @@ def list_candidates(
     parameters: list[object] = []
 
     if verdicts:
+        # COALESCE, not `verdict`, so a company the analyst re-labelled appears
+        # under the label they gave it. Filtering on the model's answer would
+        # make an override look like it had not been saved.
         placeholders = ", ".join("?" for _ in verdicts)
-        clauses.append(f"verdict IN ({placeholders})")
+        clauses.append(f"COALESCE(user_verdict, verdict) IN ({placeholders})")
         parameters.extend(verdicts)
 
     if since:
@@ -304,6 +325,103 @@ def mark_viewed(
     connection.commit()
 
     return get_candidate(connection, accession)
+
+
+def record_decision(
+    connection: sqlite3.Connection,
+    accession: str,
+    verdict: FitVerdict | None = None,
+    note: str | None = None,
+    decided_at: str | None = None,
+) -> StoredCandidate | None:
+    """
+    Save the analyst's own call, their note, or both.
+
+    The model's verdict is never touched. This writes alongside it, so a rejudge
+    cannot wipe a human decision and disagreement stays visible.
+
+    Passing None for a field leaves it as it was, which is what lets the note box
+    and the verdict buttons save independently. Clearing is explicit: an empty
+    note means "remove the note", and `clear_verdict` hands the company back to
+    the model.
+    """
+    if verdict is None and note is None:
+        return get_candidate(connection, accession)
+
+    timestamp = decided_at or datetime.now(UTC).isoformat()
+
+    sets: list[str] = []
+    parameters: list[object] = []
+
+    if verdict is not None:
+        sets.append("user_verdict = ?")
+        parameters.append(verdict)
+
+    if note is not None:
+        # An empty box means the note is gone, not that it is the empty string —
+        # otherwise "is there a note?" needs two checks everywhere.
+        cleaned = note.strip()
+        sets.append("user_note = ?")
+        parameters.append(cleaned or None)
+
+    sets.append("decided_at = ?")
+    parameters.append(timestamp)
+    parameters.append(accession)
+
+    connection.execute(
+        f"UPDATE candidate SET {', '.join(sets)} WHERE accession = ?",
+        parameters,
+    )
+    connection.commit()
+
+    return get_candidate(connection, accession)
+
+
+def clear_verdict(
+    connection: sqlite3.Connection,
+    accession: str,
+) -> StoredCandidate | None:
+    """
+    Hand a company back to the model's judgement.
+
+    Separate from record_decision because None already means "leave alone"
+    there, and overloading it would make "no opinion" unreachable.
+    """
+    connection.execute(
+        "UPDATE candidate SET user_verdict = NULL WHERE accession = ?",
+        (accession,),
+    )
+    connection.commit()
+
+    return get_candidate(connection, accession)
+
+
+def disagreements(
+    connection: sqlite3.Connection,
+    theme: str | None = None,
+) -> list[StoredCandidate]:
+    """
+    Every company where the analyst overruled the model.
+
+    This is the measure of whether the thesis is working. A handful is healthy;
+    a long list means the criteria in config/ do not say what the analyst
+    actually means, and no amount of code fixes that.
+    """
+    query = [
+        "SELECT * FROM candidate",
+        "WHERE user_verdict IS NOT NULL AND user_verdict != verdict",
+    ]
+    parameters: list[object] = []
+
+    if theme:
+        query.append("AND theme = ?")
+        parameters.append(theme)
+
+    query.append("ORDER BY decided_at DESC")
+
+    rows = connection.execute(" ".join(query), parameters).fetchall()
+
+    return [StoredCandidate(**dict(row)) for row in rows]
 
 
 def mark_all_viewed(

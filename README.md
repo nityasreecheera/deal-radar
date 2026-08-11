@@ -134,6 +134,13 @@ anything. Open a row and you get the company's website, the officers and directo
 how much of the round has sold, when it was incorporated, and a chart of every raise
 they've ever filed.
 
+Every company has a **note box and your own verdict buttons**. If the filter gets
+one wrong, overrule it — your call wins everywhere afterwards, in the list and the
+filters. Write down *why* while it's fresh: that's the thing that vanishes, and no
+model can reconstruct it, because it came from a conversation or a hunch rather than
+the filing. The filter's answer is kept underneath yours, so how often you disagree
+with it is measurable — and that's the honest test of whether the thesis is right.
+
 There's a question box at the bottom, but it only answers from companies already
 judged. It can't search or research anything new, and the page says so. That's on
 purpose: you can't ask about a company you don't know exists, and that's the whole

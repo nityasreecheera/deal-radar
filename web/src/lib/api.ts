@@ -143,6 +143,24 @@ export function filingUrl(candidate: Candidate): string | null {
 }
 
 /**
+ * What a company counts as, after the analyst has had their say.
+ *
+ * Everything visual reads this rather than `verdict`, so re-labelling a company
+ * recolours it immediately. Reading the raw field would leave an override
+ * looking like it had not saved.
+ */
+export function effectiveVerdict(candidate: Candidate): Verdict {
+  return candidate.user_verdict ?? candidate.verdict;
+}
+
+export function isOverridden(candidate: Candidate): boolean {
+  return (
+    candidate.user_verdict != null &&
+    candidate.user_verdict !== candidate.verdict
+  );
+}
+
+/**
  * Styling for a row.
  *
  * Read rows are greyed; unread rows carry their verdict's colour. The contrast
@@ -153,7 +171,7 @@ export function rowStyle(candidate: Candidate): string {
     return "border-slate-200 bg-slate-50 text-slate-400";
   }
 
-  switch (candidate.verdict) {
+  switch (effectiveVerdict(candidate)) {
     case "fits":
       return "border-emerald-300 bg-emerald-50 text-slate-900";
     case "maybe":
@@ -168,7 +186,7 @@ export function badgeStyle(candidate: Candidate): string {
     return "bg-slate-200 text-slate-500 ring-slate-300";
   }
 
-  switch (candidate.verdict) {
+  switch (effectiveVerdict(candidate)) {
     case "fits":
       return "bg-emerald-100 text-emerald-800 ring-emerald-300";
     case "maybe":

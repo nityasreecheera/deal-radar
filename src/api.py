@@ -20,18 +20,22 @@ from pydantic import BaseModel, Field
 
 from src.candidates import (
     StoredCandidate,
+    clear_verdict,
     count_by_verdict,
     count_unread,
     date_range,
+    disagreements,
     find_by_company,
     get_candidate,
     known_themes,
     list_candidates,
     mark_all_viewed,
     mark_viewed,
+    record_decision,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
 from src.funding import FundingRound, load_history, round_progress
+from src.models import FitVerdict
 from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
 from src.thesis import ThesisError, available_themes, load_thesis
@@ -336,6 +340,67 @@ def mark_one_viewed(accession: str) -> StoredCandidate:
         )
 
     return updated
+
+
+class Decision(BaseModel):
+    """The analyst's own call on a company."""
+
+    # Absent means "leave it alone", which is what lets the note box and the
+    # verdict buttons save independently without clobbering each other.
+    verdict: FitVerdict | None = None
+    note: str | None = None
+
+    # Explicit, because absent already means "no change" and there would
+    # otherwise be no way back to the model's judgement.
+    clear_verdict: bool = False
+
+
+@app.post(
+    "/api/candidates/{accession}/decision",
+    response_model=StoredCandidate,
+    responses={404: {"model": ErrorBody}},
+)
+def record_one_decision(accession: str, decision: Decision) -> StoredCandidate:
+    """
+    Save what the analyst thinks, overriding the model.
+
+    The model's verdict is left exactly where it is. This writes alongside it, so
+    rejudging cannot wipe a human decision and the two stay comparable.
+    """
+    with closing(connect()) as connection:
+        if decision.clear_verdict:
+            updated = clear_verdict(connection, accession)
+        else:
+            updated = None
+
+        result = record_decision(
+            connection,
+            accession,
+            verdict=decision.verdict,
+            note=decision.note,
+        )
+
+        updated = result or updated
+
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"ok": False, "errors": [f"no judgement for '{accession}'"]},
+        )
+
+    return updated
+
+
+@app.get("/api/disagreements", response_model=list[StoredCandidate])
+def list_disagreements(theme: str | None = None) -> list[StoredCandidate]:
+    """
+    Where the analyst overruled the model.
+
+    A long list is a signal that the thesis file does not say what the analyst
+    means, which is a config problem rather than a code one.
+    """
+    with closing(connect()) as connection:
+        return disagreements(connection, theme=theme)
 
 
 @app.post("/api/viewed", response_model=MarkedRead)

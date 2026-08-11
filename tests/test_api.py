@@ -498,3 +498,103 @@ def test_people_endpoint_lists_only_repeat_appearances(isolated: Path) -> None:
     body = client.get("/api/people").json()
 
     assert body == [{"full_name": "Kenneth Gall", "companies": 2}]
+
+
+def test_saving_a_note_over_http() -> None:
+    seed(candidate())
+
+    response = client.post(
+        "/api/candidates/acc-1/decision",
+        json={"note": "Founder was vague on the clinical data."},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user_note"] == (
+        "Founder was vague on the clinical data."
+    )
+
+
+def test_overriding_a_verdict_over_http() -> None:
+    seed(candidate(verdict="no_fit"))
+
+    body = client.post(
+        "/api/candidates/acc-1/decision",
+        json={"verdict": "fits"},
+    ).json()
+
+    # The model's answer stays on the record; the analyst's wins.
+    assert body["verdict"] == "no_fit"
+    assert body["user_verdict"] == "fits"
+    assert body["effective_verdict"] == "fits"
+    assert body["overridden"] is True
+
+
+def test_the_computed_verdict_reaches_the_browser() -> None:
+    # A @property is not serialised by Pydantic, which has silently dropped
+    # fields before. These are computed_fields precisely so they cross the wire.
+    seed(candidate())
+
+    body = client.get("/api/candidates").json()
+
+    row = body["candidates"][0] if isinstance(body, dict) else body[0]
+
+    assert "effective_verdict" in row
+    assert "overridden" in row
+
+
+def test_an_overridden_company_is_filtered_under_its_new_verdict() -> None:
+    seed(candidate(name="Rescued Co", accession="acc-1", verdict="no_fit"))
+
+    client.post("/api/candidates/acc-1/decision", json={"verdict": "fits"})
+
+    body = client.get("/api/candidates?verdict=fits").json()
+    rows = body["candidates"] if isinstance(body, dict) else body
+
+    assert [r["company_name"] for r in rows] == ["Rescued Co"]
+
+
+def test_clearing_a_verdict_over_http() -> None:
+    seed(candidate(verdict="maybe"))
+    client.post("/api/candidates/acc-1/decision", json={"verdict": "fits"})
+
+    body = client.post(
+        "/api/candidates/acc-1/decision",
+        json={"clear_verdict": True},
+    ).json()
+
+    assert body["user_verdict"] is None
+    assert body["effective_verdict"] == "maybe"
+
+
+def test_the_disagreements_endpoint_lists_overrides() -> None:
+    seed(
+        candidate(name="Overruled Co", accession="acc-1", verdict="no_fit"),
+        candidate(name="Agreed Co", accession="acc-2", verdict="fits"),
+    )
+
+    client.post("/api/candidates/acc-1/decision", json={"verdict": "fits"})
+    client.post("/api/candidates/acc-2/decision", json={"verdict": "fits"})
+
+    rows = client.get("/api/disagreements").json()
+
+    assert [r["company_name"] for r in rows] == ["Overruled Co"]
+
+
+def test_a_decision_on_a_company_that_does_not_exist_is_a_404() -> None:
+    response = client.post(
+        "/api/candidates/nope/decision",
+        json={"note": "x"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_a_nonsense_verdict_is_rejected() -> None:
+    seed(candidate())
+
+    response = client.post(
+        "/api/candidates/acc-1/decision",
+        json={"verdict": "brilliant"},
+    )
+
+    assert response.status_code == 422

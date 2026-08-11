@@ -323,7 +323,7 @@ writes is whether you have read a row.
 | [src/thesis.py](src/thesis.py) | what counts as interesting, and the free filters that run first |
 | [src/enrich.py](src/enrich.py) | what a company actually does, since the filing never says |
 | [src/judge.py](src/judge.py) | the one step where a model forms an opinion |
-| [src/candidates.py](src/candidates.py) | every judgement and its reasoning, queryable |
+| [src/candidates.py](src/candidates.py) | every judgement and its reasoning, plus the analyst's own call on top |
 | [src/funding.py](src/funding.py) | a company's whole filing history, not just today's |
 | [src/people.py](src/people.py) | officers and directors, and who else they appear with |
 | [src/pipeline.py](src/pipeline.py) | the run, and the ordering rules that keep it safe |
@@ -362,6 +362,27 @@ web/.env.local           credentials for sharing (git-ignored)
 months later. It's keyed on the filing rather than the company, because a company can
 file more than once and each filing gets judged on its own evidence. `person` and
 `funding_round` hold the cross-filing detail the website shows when you open a row.
+
+### The analyst's verdict versus the model's
+
+`user_verdict`, `user_note` and `decided_at` sit next to `verdict` rather than
+replacing it. That separation is load-bearing for three reasons:
+
+- `rejudge.py` rewrites `verdict` whenever the prompt changes. A human decision
+  stored there would be wiped without a trace.
+- Disagreement is the only real evidence of whether the thesis is any good. A long
+  `/api/disagreements` list means `config/thesis.yaml` doesn't say what the analyst
+  means, which is a config problem, not a code one.
+- "The filter said no, you said yes" is itself worth showing.
+
+Everything that reads a verdict uses `COALESCE(user_verdict, verdict)` — including
+the list filters, or a company someone re-labelled would vanish from the label they
+gave it. On the frontend the same rule lives in `effectiveVerdict()`, and every piece
+of styling goes through it.
+
+`effective_verdict` and `overridden` are Pydantic **computed fields**, not
+properties. A `@property` isn't serialised and would never reach the browser, which
+has already cost time twice on this project.
 
 ### Changing the schema
 
