@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { DecisionPanel } from "@/components/DecisionPanel";
 import { FundingChart } from "@/components/FundingChart";
-import { formatAmount, type Candidate, type Detail } from "@/lib/api";
+import { formatAmount, type Detail } from "@/lib/api";
 
 /**
  * The parts of a company that only exist once you look across filings.
@@ -55,13 +54,6 @@ export function CompanyDetail({ accession }: { accession: string }) {
 
   return (
     <div className="space-y-6">
-      <DecisionPanel
-        candidate={detail.candidate}
-        onChange={(updated: Candidate) =>
-          setDetail({ ...detail, candidate: updated })
-        }
-      />
-
       {percent !== null && percent !== undefined && (
         <section>
           <h3 className="label mb-2">This round</h3>
