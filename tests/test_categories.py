@@ -12,10 +12,12 @@ from pathlib import Path
 import pytest
 
 from src.candidates import (
+    MAX_CLUSTERS_REPORTED,
     CategoryContext,
     category_context,
     category_counts,
     describe_category,
+    describe_rejection_clusters,
     ordinal_suffix,
     quarter_start,
     record_decision,
@@ -171,3 +173,95 @@ def test_a_category_with_both_outcomes_reports_the_fits(db) -> None:
 
     assert "5th clinical workflow company" in context.describe()
     assert "2 of them fit" in context.describe()
+
+
+def test_the_footer_names_what_you_keep_rejecting(db) -> None:
+    for n in range(5):
+        store(db, f"drug-{n}", "drug development")
+    for n in range(3):
+        store(db, f"dev-{n}", "medical devices")
+
+    line = describe_rejection_clusters(db)
+
+    assert "5 drug development" in line
+    assert "3 medical devices" in line
+    assert "8 companies looked up to reject" in line
+
+
+def test_a_category_that_has_ever_fitted_is_not_suggested_as_a_rule(db) -> None:
+    # Proxima Bio is drug development and it fit. Telling someone to filter out
+    # drug development would be telling them to filter out what they want.
+    for n in range(4):
+        store(db, f"drug-{n}", "drug development")
+
+    store(db, "drug-good", "drug development", verdict="fits")
+
+    assert describe_rejection_clusters(db) == ""
+
+
+def test_a_rescued_company_removes_its_category_from_the_footer(db) -> None:
+    for n in range(4):
+        store(db, f"acc-{n}", "medical devices")
+
+    assert "medical devices" in describe_rejection_clusters(db)
+
+    # The analyst overrules one. The category is no longer a clean rule.
+    record_decision(db, "acc-0", verdict="fits")
+
+    assert describe_rejection_clusters(db) == ""
+
+
+def test_a_quiet_quarter_produces_no_footer(db) -> None:
+    store(db, "acc-1", "medical devices")
+    store(db, "acc-2", "medical devices")
+
+    assert describe_rejection_clusters(db) == ""
+
+
+def test_the_footer_is_capped(db) -> None:
+    for category in (
+        "drug development",
+        "medical devices",
+        "life sciences tools",
+        "healthcare services",
+        "not healthcare",
+    ):
+        for n in range(3):
+            store(db, f"{category}-{n}", category)
+
+    line = describe_rejection_clusters(db)
+
+    # Five categories qualify, four are named — but the total counts them all.
+    assert line.count(" 3 ") <= MAX_CLUSTERS_REPORTED
+    assert "15 companies looked up to reject" in line
+
+
+def test_judgements_are_filed_under_the_short_domain_label(db) -> None:
+    """
+    The label rows are stored under, and the one queries must use.
+
+    Thesis has both `domain` ("Healthcare") and `name` ("Healthcare AI and
+    clinical software"). Rows carry `domain`. Filtering on `name` matches
+    nothing — and matches nothing *silently*, so the category lines simply never
+    appeared in the email and everything looked like it was working. This test
+    exists so that stays fixed.
+    """
+    from src.thesis import Thesis
+
+    thesis = Thesis(
+        domain="Healthcare",
+        name="Healthcare AI and clinical software",
+        description="Software used in care delivery.",
+        include=["clinical software"],
+    )
+
+    for n in range(4):
+        store(db, f"acc-{n}", "medical devices")
+
+    # Rows were saved with theme="Healthcare" by the store() helper, matching
+    # what the pipeline does.
+    assert category_context(db, "medical devices", theme=thesis.domain).seen == 4
+    assert category_context(db, "medical devices", theme=thesis.name).seen == 0
+
+    assert describe_rejection_clusters(db, theme=thesis.domain) != ""
+    assert describe_rejection_clusters(db, theme=thesis.name) == ""

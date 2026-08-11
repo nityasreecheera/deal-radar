@@ -271,3 +271,15 @@ def test_no_context_means_no_extra_line() -> None:
 
     assert "Lonely Co" in content
     assert "company you've seen" not in content
+
+
+def test_the_footer_reaches_the_email() -> None:
+    content = render_digest(
+        run(),
+        "Healthcare AI",
+        clusters="This quarter: 16 drug development — all passed. Worth a thesis rule?",
+    )
+
+    assert "16 drug development" in content
+    # With the other counting lines, not attached to a company.
+    assert content.index("16 drug development") > content.index("Acme Health")

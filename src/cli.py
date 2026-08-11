@@ -14,7 +14,11 @@ from src.candidates import (
     list_candidates,
 )
 from src.delivery import deliver
-from src.candidates import describe_category, quarter_start
+from src.candidates import (
+    describe_category,
+    describe_rejection_clusters,
+    quarter_start,
+)
 from src.digest import render_digest, save_digest
 from src.edgar import fetch_filings
 from src.pipeline import default_window, run_radar
@@ -63,12 +67,22 @@ def command_run(args: argparse.Namespace) -> int:
         # because it needs the database, and while the connection is still open.
         contexts = {
             candidate.filing.accession: describe_category(
-                connection, candidate, since=quarter_start(end), theme=thesis.name
+                connection,
+                candidate,
+                since=quarter_start(end),
+                # domain, not name. Judgements are stored under the short
+                # label; `name` is the human description, and filtering on it
+                # matches nothing at all — silently, which is the problem.
+                theme=thesis.domain,
             )
             for candidate in run.interesting
         }
 
-    digest = render_digest(run, thesis.name, contexts)
+        clusters = describe_rejection_clusters(
+            connection, since=quarter_start(end), theme=thesis.domain
+        )
+
+    digest = render_digest(run, thesis.name, contexts, clusters)
 
     print(digest)
 

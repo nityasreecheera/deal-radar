@@ -710,3 +710,49 @@ def describe_category(
         since=since,
         theme=theme,
     ).describe()
+
+
+# Four is as many as a footer can carry before it stops being a footer. The
+# categories are ranked by volume, so the ones that get cut are the small ones.
+MAX_CLUSTERS_REPORTED = 4
+
+
+def describe_rejection_clusters(
+    connection: sqlite3.Connection,
+    since: str | None = None,
+    theme: str | None = None,
+) -> str:
+    """
+    The kinds of company you keep turning down, for the bottom of the digest.
+
+    This exists because the per-company line cannot do this job. That line only
+    reaches companies that make the digest — fits and maybes — and those are the
+    small categories. The big ones are all rejections, which by design never
+    appear, so the pattern that is actually worth acting on was invisible in the
+    one place it would be read.
+
+    Only categories with no fits at all are listed. A category that has produced
+    even one fit is not a rule you can write, and suggesting otherwise would be
+    telling someone to filter out the thing they are looking for.
+    """
+    clusters = [
+        c
+        for c in category_counts(connection, since=since, theme=theme)
+        if c.fitted == 0
+        and c.seen >= 3
+        and c.category not in ("unclear", "")
+    ]
+
+    if not clusters:
+        return ""
+
+    named = ", ".join(
+        f"{c.seen} {c.category}" for c in clusters[:MAX_CLUSTERS_REPORTED]
+    )
+
+    total = sum(c.seen for c in clusters)
+
+    return (
+        f"This quarter: {named} — all passed. "
+        f"That's {total} companies looked up to reject. Worth a thesis rule?"
+    )

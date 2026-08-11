@@ -118,12 +118,14 @@ def render_digest(
     run: RadarRun,
     thesis_name: str,
     contexts: dict[str, str] | None = None,
+    clusters: str = "",
 ) -> str:
     """
     Render a run as the message that gets sent.
 
     `contexts` maps accession to a line about how that company sits against the
-    others in its category. Passed in rather than looked up, so this module keeps
+    others in its category, and `clusters` is the standing pattern in what gets
+    rejected. Both are passed in rather than looked up, so this module keeps
     rendering and nothing else.
     """
     interesting = run.interesting
@@ -178,6 +180,12 @@ def render_digest(
             f"{len(run.unknowns)} could not be identified at all — "
             "see the unknown list."
         )
+
+    # Last of the counting lines. Everything above is about this morning; this
+    # is about the quarter, and interleaving the two makes both harder to read.
+    if clusters:
+        lines.append("")
+        lines.append(clusters)
 
     # Above the problem list, because a coverage gap is not a footnote —
     # it changes what the rest of the email means.

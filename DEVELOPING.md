@@ -450,6 +450,12 @@ returned None for every real filing while the suite stayed green. Fixtures inven
 from an assumption test the assumption, not the document. The fixture is now the
 shape EDGAR actually serves.
 
+**`thesis.domain` is the label rows are stored under; `thesis.name` is prose.**
+"Healthcare" versus "Healthcare AI and clinical software". I filtered the category
+counts on `name`, which matches no row ever — silently, so the new lines simply never
+appeared in the email and everything looked like it worked. Anything querying by theme
+must use `domain`. There is a test naming both.
+
 **Amendments were being thrown away entirely.** Proxima Bio opened at $88.5M in January
 and amended to $91.5M in June; only the first number was being reported, so the round
 looked smaller than it was and the fact that it filled was invisible. Amendments now plot,
