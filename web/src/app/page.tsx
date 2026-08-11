@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AskBox } from "@/components/AskBox";
 import { CandidateRow } from "@/components/CandidateRow";
@@ -13,17 +14,69 @@ import {
   type Meta,
 } from "@/lib/api";
 
+/**
+ * The list.
+ *
+ * Filters live in the URL rather than in component state. That is what makes
+ * the back button from a company page work: leaving the list and returning has
+ * to land on the list you were looking at, not on the default view. It also
+ * makes a filtered list something you can send someone.
+ */
+
+const DEFAULT_VERDICTS = ["fits", "maybe"];
+
 export default function Home() {
+  // useSearchParams forces client rendering up to the nearest boundary, and a
+  // production build fails outright without one.
+  return (
+    <Suspense fallback={<p className="label px-8 py-10">Loading</p>}>
+      <CandidateList />
+    </Suspense>
+  );
+}
+
+function CandidateList() {
+  const router = useRouter();
+  const params = useSearchParams();
+
   const [meta, setMeta] = useState<Meta | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreachable, setUnreachable] = useState(false);
+  const [reloads, setReloads] = useState(0);
 
-  const [theme, setTheme] = useState<string>("");
-  const [verdicts, setVerdicts] = useState<string[]>(["fits", "maybe"]);
-  const [since, setSince] = useState<string>("");
-  const [until, setUntil] = useState<string>("");
-  const [unreadOnly, setUnreadOnly] = useState(false);
+  const theme = params.get("theme") ?? "";
+  const since = params.get("since") ?? "";
+  const until = params.get("until") ?? "";
+  const unreadOnly = params.get("unread") === "1";
+
+  // An explicitly empty `verdict` means "none selected", which is different
+  // from the parameter being absent. Reading it as absent would silently
+  // re-select the defaults and make deselecting everything impossible.
+  const verdicts = useMemo(() => {
+    const raw = params.get("verdict");
+
+    if (raw === null) return DEFAULT_VERDICTS;
+
+    return raw === "" ? [] : raw.split(",");
+  }, [params]);
+
+  /** Rewrite the URL. Everything reads back out of it. */
+  const setFilters = useCallback(
+    (changes: Record<string, string | null>) => {
+      const next = new URLSearchParams(params.toString());
+
+      for (const [key, value] of Object.entries(changes)) {
+        if (value === null) next.delete(key);
+        else next.set(key, value);
+      }
+
+      // replace, not push: a back button that walks through every filter
+      // fiddle before leaving the page is worse than useless.
+      router.replace(next.toString() ? `/?${next}` : "/", { scroll: false });
+    },
+    [params, router],
+  );
 
   const query = useMemo(
     () =>
@@ -53,6 +106,26 @@ export default function Home() {
 
   useEffect(() => {
     void loadMeta();
+  }, [loadMeta]);
+
+  // Coming back from a company page has to show it as read. The page marked it,
+  // not the list, and returning does not necessarily remount this component —
+  // so refresh when the tab regains attention rather than trusting the mount.
+  useEffect(() => {
+    function refresh() {
+      if (document.visibilityState === "visible") {
+        setReloads((n) => n + 1);
+        void loadMeta();
+      }
+    }
+
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [loadMeta]);
 
   useEffect(() => {
@@ -88,30 +161,25 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [query]);
+  }, [query, reloads]);
 
   /** Update one row in place rather than refetching the whole list. */
-  const handleRead = useCallback(
-    (accession: string) => {
-      setCandidates((current) =>
-        current.map((item) =>
-          item.accession === accession
-            ? { ...item, viewed_at: new Date().toISOString() }
-            : item,
-        ),
-      );
-
-      void loadMeta();
-    },
-    [loadMeta],
-  );
+  const handleRead = useCallback((accession: string) => {
+    setCandidates((current) =>
+      current.map((item) =>
+        item.accession === accession
+          ? { ...item, viewed_at: new Date().toISOString() }
+          : item,
+      ),
+    );
+  }, []);
 
   function toggleVerdict(verdict: string) {
-    setVerdicts((current) =>
-      current.includes(verdict)
-        ? current.filter((item) => item !== verdict)
-        : [...current, verdict],
-    );
+    const next = verdicts.includes(verdict)
+      ? verdicts.filter((item) => item !== verdict)
+      : [...verdicts, verdict];
+
+    setFilters({ verdict: next.join(",") });
   }
 
   async function markAllRead() {
@@ -122,9 +190,7 @@ export default function Home() {
 
     setCandidates((current) =>
       current.map((item) =>
-        item.viewed_at
-          ? item
-          : { ...item, viewed_at: new Date().toISOString() },
+        item.viewed_at ? item : { ...item, viewed_at: new Date().toISOString() },
       ),
     );
 
@@ -139,14 +205,16 @@ export default function Home() {
           Start it on the VM, then reload.
         </p>
         <pre className="tabular mt-4 overflow-x-auto border-l-2 border-[var(--color-rule)] pl-4 text-xs text-[var(--color-ink-faint)]">
-          cd ~/deal-radar{"\n"}
-          .venv/bin/uvicorn src.api:app --port 8100
+          systemctl --user restart radar-api
         </pre>
       </main>
     );
   }
 
   const unread = meta?.unread ?? 0;
+
+  // Handed to each row so the company page can send you back to this exact list.
+  const from = params.toString();
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -177,7 +245,9 @@ export default function Home() {
             <span className="label mb-1 block">Domain</span>
             <select
               value={theme}
-              onChange={(event) => setTheme(event.target.value)}
+              onChange={(event) =>
+                setFilters({ theme: event.target.value || null })
+              }
               className="field pr-6"
             >
               <option value="">All</option>
@@ -196,7 +266,9 @@ export default function Home() {
               value={since}
               min={meta?.earliest_filing ?? undefined}
               max={meta?.latest_filing ?? undefined}
-              onChange={(event) => setSince(event.target.value)}
+              onChange={(event) =>
+                setFilters({ since: event.target.value || null })
+              }
               className="field tabular"
             />
           </label>
@@ -208,7 +280,9 @@ export default function Home() {
               value={until}
               min={meta?.earliest_filing ?? undefined}
               max={meta?.latest_filing ?? undefined}
-              onChange={(event) => setUntil(event.target.value)}
+              onChange={(event) =>
+                setFilters({ until: event.target.value || null })
+              }
               className="field tabular"
             />
           </label>
@@ -238,7 +312,9 @@ export default function Home() {
             <input
               type="checkbox"
               checked={unreadOnly}
-              onChange={(event) => setUnreadOnly(event.target.checked)}
+              onChange={(event) =>
+                setFilters({ unread: event.target.checked ? "1" : null })
+              }
               className="accent-[var(--color-ink)]"
             />
             Unread only
@@ -248,10 +324,7 @@ export default function Home() {
             {(since || until) && (
               <button
                 type="button"
-                onClick={() => {
-                  setSince("");
-                  setUntil("");
-                }}
+                onClick={() => setFilters({ since: null, until: null })}
                 className="text-[0.75rem] text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
               >
                 clear dates
@@ -284,6 +357,7 @@ export default function Home() {
                 <CandidateRow
                   key={candidate.accession}
                   candidate={candidate}
+                  from={from}
                   onRead={handleRead}
                 />
               ))}

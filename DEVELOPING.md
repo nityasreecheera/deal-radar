@@ -207,8 +207,20 @@ ssh -L 3100:localhost:3100 oci
 Ports 3100 and 8100 rather than 3000 and 8000, so it doesn't clash with anything else
 on the same server.
 
-Reading gets recorded when you open a row rather than when the page loads, so the
-count tracks attention instead of delivery.
+Reading gets recorded when the company's own page opens, rather than when the list
+loads, so the count tracks attention instead of delivery — and arriving by a direct
+link counts too.
+
+Two routes: `/` is the list, `/company/[accession]` is one company. **List filters
+live in the URL, not in state.** That is what makes the back button land on the list
+you were actually looking at rather than the default view, and it makes a filtered
+list something you can send someone. The row passes the current query string along
+as `?from=`, and the back link reads it.
+
+`useSearchParams` forces client rendering up to the nearest Suspense boundary, and a
+production build fails outright without one — hence the boundary around the list.
+Dynamic route params arrive as a Promise in this version of Next and are unwrapped
+with React's `use()`.
 
 The question box has no tools at all, so it can't search or research anything. That's
 a capability restriction, not an instruction — there's nothing to talk it out of.
