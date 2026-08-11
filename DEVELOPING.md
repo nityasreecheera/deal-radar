@@ -215,21 +215,53 @@ a capability restriction, not an instruction — there's nothing to talk it out 
 
 ### Sharing it
 
-```bash
-printf 'SHARE_USER=review\nSHARE_PASSWORD=...\n' > web/.env.local
-./scripts/share.sh
+The site lives at a permanent address:
+
+```
+https://radar.humpback-pleco.ts.net
 ```
 
-Serves the production build through a Cloudflare tunnel. No firewall changes and no
-open ports, because cloudflared connects outward.
+That's a Tailscale Funnel. `tailscaled` dials outward and Tailscale terminates
+HTTPS, so there is still no open port and no security-list change on the VM — same
+property as the old Cloudflare tunnel, but the name doesn't change on restart.
 
-The password isn't optional and the script won't publish without one. The question box
-spends money on every request and marking things read is a write, so an unprotected URL
-is somebody else's ability to run up a bill. `share.sh` checks the site actually returns
-401 before opening the tunnel, rather than assuming the gate works. The question box is
-capped at sixty questions an hour, so a runaway becomes a refusal instead of a bill.
+```bash
+sudo tailscale funnel --bg 3100      # on
+sudo tailscale funnel --https=443 off  # off
+```
 
-The URL is temporary and different every time.
+The tailnet name is bound to the certificate once Funnel issues one, so it can't be
+renamed again. `radar.humpback-pleco` is what it is.
+
+The password gate is unchanged and still not optional. It's Next.js middleware
+reading `SHARE_USER` and `SHARE_PASSWORD` from `web/.env.local`. The question box
+spends money on every request and marking things read is a write, so an unprotected
+URL is somebody else's ability to run up a bill. The chat endpoint is capped at sixty
+questions an hour, so a runaway becomes a refusal instead of a bill.
+
+`scripts/share.sh` still exists and still opens a throwaway Cloudflare tunnel. It's
+only useful now if you want a second, disposable URL — the permanent one is served
+by systemd and needs no script.
+
+### Surviving a reboot
+
+The API and the website run as **user** systemd services, not from tmux:
+
+```bash
+systemctl --user status radar-api radar-web
+systemctl --user restart radar-web
+journalctl --user -u radar-web -n 50
+```
+
+They're user services rather than system ones because SELinux on Oracle Linux
+refuses to let `init_t` execute anything labelled `user_home_t` — a system unit
+pointing at `/home/opc/deal-radar/.venv/bin/uvicorn` dies with a bare "Permission
+denied" that looks nothing like an SELinux problem. Running them in the user manager
+sidesteps it, and `loginctl enable-linger opc` is what makes the user manager start
+at boot instead of at first login.
+
+Verified by actually rebooting: the VM came back and the public URL answered on its
+own in about ninety seconds, with no login and nothing started by hand.
 
 ## Scripts
 

@@ -91,8 +91,9 @@ About **$2 a month**. SEC filings are free and public. Web search runs on a free
 tier. The only real cost is the model that reads each company, and that's roughly
 two dollars at this volume.
 
-It runs on a small cloud server on a schedule. Nothing has to be open, nothing has
-to be running, and it survives a reboot.
+It runs on a small cloud server on a schedule. Nothing has to be open and nothing
+has to be running. The site sits at a fixed address behind a password, and both it
+and the daily run come back on their own after a reboot.
 
 ## How it works
 
