@@ -132,10 +132,30 @@ export default function CompanyPage({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-8 py-8">
-        <DecisionPanel candidate={candidate} onChange={setCandidate} />
+      {/* Evidence on the left, the decision on the right.
 
-        <CompanyProfile candidate={candidate} />
+          Side by side rather than stacked because the two are read together:
+          you are looking at the funding history *while* deciding, and a panel
+          above the evidence gets scrolled past and forgotten. Sticky, so it
+          stays reachable however far down the page you are.
+
+          It stacks below the evidence on narrow screens, where there is no room
+          for two columns and scrolling past a form to reach the facts would be
+          worse than scrolling past the facts to reach the form. */}
+      <main className="mx-auto w-full max-w-5xl flex-1 px-8 py-8">
+        <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">
+            <CompanyProfile candidate={candidate} />
+          </div>
+
+          <aside className="w-full shrink-0 lg:sticky lg:top-8 lg:w-[19rem]">
+            {/* A rule separates it from the evidence: a left edge beside the
+                column, a top edge when it drops underneath. */}
+            <div className="border-t border-[var(--color-rule)] pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+              <DecisionPanel candidate={candidate} onChange={setCandidate} />
+            </div>
+          </aside>
+        </div>
       </main>
     </div>
   );
