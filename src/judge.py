@@ -17,7 +17,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from src.enrich import Enrichment
-from src.models import Candidate, FitVerdict, FormDFiling
+from src.models import CATEGORIES, Candidate, CompanyCategory, FitVerdict, FormDFiling
 from src.thesis import Thesis, describe_for_prompt
 
 
@@ -60,6 +60,12 @@ Rules that matter more than being decisive:
 - Also give a one-line summary of what the company does, in plain terms, or null
   if the evidence does not say. The summary describes the business; the reason
   explains the verdict. Do not merge them.
+- Finally, put the company in exactly one category from the list given. The
+  category describes what kind of business it is and is independent of the
+  verdict: a drug company outside the thesis and a drug company inside it are
+  both "drug development". Use "not healthcare" freely — the search deliberately
+  sweeps a wide net and catches a lot that is not healthcare at all. Use
+  "unclear" only when you also could not say what the company does.
 """
 
 # A judge takes the rendered prompt and returns raw model text.
@@ -76,6 +82,10 @@ class Judgement(BaseModel):
     verdict: FitVerdict
     reason: str = Field(min_length=1)
     summary: str | None = None
+
+    # What kind of business, independent of whether it fits. Counting these is
+    # what turns "here is a company" into "this is the fifth of these".
+    category: CompanyCategory = "unclear"
 
     @property
     def is_interesting(self) -> bool:
@@ -160,6 +170,8 @@ def build_prompt(
         for person in filing.related_persons[:4]
     )
 
+    categories = ", ".join(f'"{name}"' for name in CATEGORIES)
+
     amount = (
         f"${filing.total_offering_amount:,}"
         if filing.total_offering_amount is not None
@@ -205,7 +217,8 @@ People named on the filing: {people or "none listed"}
 Reply with JSON only:
 {{"verdict": "fits" | "maybe" | "unknown" | "no_fit",
   "reason": "one specific sentence explaining the verdict",
-  "summary": "one line on what the company does, or null if unknown"}}
+  "summary": "one line on what the company does, or null if unknown",
+  "category": one of {categories}}}
 """
 
 
@@ -252,6 +265,7 @@ def judge_filing(
     return Candidate(
         filing=filing,
         verdict=judgement.verdict,
+        category=judgement.category,
         reason=judgement.reason,
         summary=judgement.summary,
         website=enrichment.website,

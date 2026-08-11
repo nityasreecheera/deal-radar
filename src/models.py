@@ -148,6 +148,51 @@ class SeenCompany(BaseModel):
 # shrugs, which is the fastest way to make a daily read stop being read.
 FitVerdict = Literal["fits", "maybe", "unknown", "no_fit"]
 
+# What kind of business this is, separate from whether it fits.
+#
+# A fixed list rather than free text, because the whole value is in counting:
+# "emergency department software", "ED workflow" and "emergency dept coordination"
+# are one category to a human and three to a GROUP BY. A closed vocabulary means
+# the fifth one actually reads as the fifth.
+#
+# Drawn from what the real data contains. Four of the first eight companies that
+# fit were clinical workflow, and four of the rejections were drug molecules —
+# categories nobody would have guessed in advance but which the filings insist on.
+CompanyCategory = Literal[
+    # Inside the current thesis
+    "clinical workflow",
+    "ehr and documentation",
+    "diagnostics and imaging",
+    "virtual care",
+    "patient engagement",
+    "health data and analytics",
+    "ai infrastructure",
+    # Healthcare, but not software
+    "drug development",
+    "medical devices",
+    "life sciences tools",
+    "healthcare services",
+    # Everything the Technology sweep drags in
+    "not healthcare",
+    "unclear",
+]
+
+CATEGORIES: tuple[str, ...] = (
+    "clinical workflow",
+    "ehr and documentation",
+    "diagnostics and imaging",
+    "virtual care",
+    "patient engagement",
+    "health data and analytics",
+    "ai infrastructure",
+    "drug development",
+    "medical devices",
+    "life sciences tools",
+    "healthcare services",
+    "not healthcare",
+    "unclear",
+)
+
 
 class Candidate(BaseModel):
     """
@@ -161,6 +206,7 @@ class Candidate(BaseModel):
     filing: FormDFiling
     verdict: FitVerdict
     reason: str = Field(min_length=1)
+    category: CompanyCategory = "unclear"
 
     # What the company does, in one line. Distinct from `reason`, which explains
     # the verdict. A detail view needs the former and the digest needs the

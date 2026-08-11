@@ -45,8 +45,18 @@ def format_location(candidate: Candidate) -> str:
     return city or state or "location unknown"
 
 
-def render_entry(index: int, candidate: Candidate) -> list[str]:
-    """One company, as three or four short lines."""
+def render_entry(
+    index: int,
+    candidate: Candidate,
+    context: str = "",
+) -> list[str]:
+    """
+    One company, as three or four short lines.
+
+    `context` is how this company sits against the ones like it, worked out by
+    the caller because it needs the database and this module deliberately does
+    not touch one.
+    """
     filing = candidate.filing
     mark = VERDICT_MARK[candidate.verdict]
 
@@ -93,14 +103,29 @@ def render_entry(index: int, candidate: Candidate) -> list[str]:
     if minimum:
         lines.append(f"   {minimum}")
 
+    # Where this sits among the ones like it. Last of the judgement lines,
+    # because it is context for the decision rather than part of it.
+    if context:
+        lines.append(f"   {context}")
+
     if candidate.website:
         lines.append(f"   {candidate.website}")
 
     return lines
 
 
-def render_digest(run: RadarRun, thesis_name: str) -> str:
-    """Render a run as the message that gets sent."""
+def render_digest(
+    run: RadarRun,
+    thesis_name: str,
+    contexts: dict[str, str] | None = None,
+) -> str:
+    """
+    Render a run as the message that gets sent.
+
+    `contexts` maps accession to a line about how that company sits against the
+    others in its category. Passed in rather than looked up, so this module keeps
+    rendering and nothing else.
+    """
     interesting = run.interesting
 
     header = (
@@ -124,7 +149,13 @@ def render_digest(run: RadarRun, thesis_name: str) -> str:
             lines.append("Nothing new matched the thesis.")
     else:
         for index, candidate in enumerate(interesting, start=1):
-            lines.extend(render_entry(index, candidate))
+            lines.extend(
+                render_entry(
+                    index,
+                    candidate,
+                    (contexts or {}).get(candidate.filing.accession, ""),
+                )
+            )
             lines.append("")
 
     # The skipped count is the point of the whole thing: it is the work that did

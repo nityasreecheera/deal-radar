@@ -31,6 +31,7 @@ class StoredCandidate(BaseModel):
     verdict: FitVerdict
     reason: str = Field(min_length=1)
     summary: str | None = None
+    category: str | None = None
     website: str | None = None
     description: str | None = None
     offering_amount: int | None = None
@@ -136,11 +137,11 @@ def save_candidate(
             website, description, offering_amount, filed_date,
             industry_group, city, state, incorporated, judged_at, theme,
             people, amount_sold, investor_count, jurisdiction, entity_type, cik,
-            summary, minimum_investment, first_sale_date
+            summary, minimum_investment, first_sale_date, category
         )
         VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?
+            ?, ?, ?
         )
         ON CONFLICT (accession) DO UPDATE SET
             verdict         = excluded.verdict,
@@ -171,7 +172,8 @@ def save_candidate(
             ),
             first_sale_date = COALESCE(
                 excluded.first_sale_date, candidate.first_sale_date
-            )
+            ),
+            category        = COALESCE(excluded.category, candidate.category)
         """,
         (
             filing.accession,
@@ -198,6 +200,7 @@ def save_candidate(
             candidate.summary,
             filing.minimum_investment,
             filing.first_sale_date,
+            candidate.category,
         ),
     )
     connection.commit()
@@ -526,3 +529,184 @@ if __name__ == "__main__":
 
         for item in list_candidates(db, verdicts=["fits"], limit=10):
             print(f"  {item.company_name} — {item.reason}")
+
+
+class CategoryContext(BaseModel):
+    """
+    How many companies like this one you have already seen, and what you did.
+
+    The point of the whole feature. One company tells you about one company;
+    the count tells you whether a category is crowding up, or whether you keep
+    rejecting the same thing and should say so in the thesis instead of paying
+    to look each one up.
+    """
+
+    category: str
+    seen: int = 0
+    rejected: int = 0
+    fitted: int = 0
+    since: str = ""
+
+    @property
+    def is_worth_saying(self) -> bool:
+        """
+        Whether this is news.
+
+        A count of one is just the company itself, and a count of two is a
+        coincidence. Below three, saying it adds a line to the email without
+        adding anything to know.
+        """
+        return self.seen >= 3 and self.category not in ("unclear", "")
+
+    def describe(self) -> str:
+        """One line for a human."""
+        if not self.is_worth_saying:
+            return ""
+
+        ordinal = f"{self.seen}{ordinal_suffix(self.seen)}"
+        sentence = f"The {ordinal} {self.category} company you've seen"
+
+        if self.since:
+            sentence += f" since {self.since}"
+
+        if self.rejected and not self.fitted:
+            # The actionable case: a category you keep turning down belongs in
+            # the thesis file, not in the inbox.
+            others = self.rejected - 1 if self.rejected == self.seen else self.rejected
+            sentence += f" — you passed on {'the other ' if others else ''}{others}"
+        elif self.fitted:
+            sentence += f" — {self.fitted} of them fit"
+
+        return sentence + "."
+
+
+def ordinal_suffix(number: int) -> str:
+    """1st, 2nd, 3rd, 4th. Teens are all 'th', which is the usual trap."""
+    if 11 <= (number % 100) <= 13:
+        return "th"
+
+    return {1: "st", 2: "nd", 3: "rd"}.get(number % 10, "th")
+
+
+def category_context(
+    connection: sqlite3.Connection,
+    category: str | None,
+    since: str | None = None,
+    theme: str | None = None,
+    accession: str | None = None,
+) -> CategoryContext:
+    """
+    Count the companies in one category, and what was decided about them.
+
+    Counts on the effective verdict, so a company the analyst personally rescued
+    counts as a fit rather than as the model's rejection. Anything else would
+    report your own history back to you wrongly.
+
+    `accession` is included in the count rather than excluded: "the 5th" should
+    count the one you are reading, which is what makes it an ordinal rather than
+    a tally of everything else.
+    """
+    if not category:
+        return CategoryContext(category="", since=since or "")
+
+    clauses = ["category = ?"]
+    parameters: list[object] = [category]
+
+    if since:
+        clauses.append("filed_date >= ?")
+        parameters.append(since)
+
+    if theme:
+        clauses.append("theme = ?")
+        parameters.append(theme)
+
+    rows = connection.execute(
+        "SELECT COALESCE(user_verdict, verdict) AS decided FROM candidate "
+        f"WHERE {' AND '.join(clauses)}",
+        parameters,
+    ).fetchall()
+
+    return CategoryContext(
+        category=category,
+        seen=len(rows),
+        rejected=sum(1 for r in rows if r["decided"] == "no_fit"),
+        fitted=sum(1 for r in rows if r["decided"] == "fits"),
+        since=since or "",
+    )
+
+
+def category_counts(
+    connection: sqlite3.Connection,
+    since: str | None = None,
+    theme: str | None = None,
+) -> list[CategoryContext]:
+    """Every category with at least one company, commonest first."""
+    clauses = ["category IS NOT NULL", "category != ''"]
+    parameters: list[object] = []
+
+    if since:
+        clauses.append("filed_date >= ?")
+        parameters.append(since)
+
+    if theme:
+        clauses.append("theme = ?")
+        parameters.append(theme)
+
+    rows = connection.execute(
+        """
+        SELECT category,
+               COUNT(*) AS seen,
+               SUM(COALESCE(user_verdict, verdict) = 'no_fit') AS rejected,
+               SUM(COALESCE(user_verdict, verdict) = 'fits') AS fitted
+        FROM candidate
+        WHERE """
+        + " AND ".join(clauses)
+        + " GROUP BY category ORDER BY seen DESC",
+        parameters,
+    ).fetchall()
+
+    return [
+        CategoryContext(
+            category=row["category"],
+            seen=row["seen"],
+            rejected=row["rejected"] or 0,
+            fitted=row["fitted"] or 0,
+            since=since or "",
+        )
+        for row in rows
+    ]
+
+
+def quarter_start(on_date: str) -> str:
+    """
+    The first day of the quarter a date falls in.
+
+    "This quarter" rather than "ever" because a category being busy now is the
+    news. Four of something over two years is nothing; four in ten weeks is a
+    pattern. An all-time count would just keep climbing and stop meaning
+    anything.
+    """
+    year, month = int(on_date[:4]), int(on_date[5:7])
+
+    return f"{year}-{3 * ((month - 1) // 3) + 1:02d}-01"
+
+
+def describe_category(
+    connection: sqlite3.Connection,
+    candidate: Candidate,
+    since: str | None = None,
+    theme: str | None = None,
+) -> str:
+    """
+    One line on how a company sits against the ones like it, or nothing.
+
+    Returns an empty string below the threshold, which is most of the time and
+    is correct: a category with two members has nothing to say, and a line
+    saying so would be noise in a digest that only works while it stays short.
+    """
+    return category_context(
+        connection,
+        getattr(candidate, "category", None),
+        since=since,
+        theme=theme,
+    ).describe()

@@ -185,6 +185,9 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
         "first_sale_date",
         "ALTER TABLE candidate ADD COLUMN first_sale_date TEXT",
     ),
+    # What kind of business, so a company can be counted against the ones like
+    # it rather than judged alone.
+    ("candidate", "category", "ALTER TABLE candidate ADD COLUMN category TEXT"),
 )
 
 

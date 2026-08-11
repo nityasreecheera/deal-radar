@@ -104,6 +104,19 @@ export function CompanyDetail({ accession }: { accession: string }) {
         </section>
       )}
 
+      {/* How this company sits among the ones like it. Above the funding
+          history because it frames everything below: the fifth of something is
+          read differently from the first. */}
+      {detail.category_note && (
+        <section>
+          <h3 className="label mb-2">Among the ones like it</h3>
+
+          <p className="text-sm text-[var(--color-ink-soft)]">
+            {detail.category_note}
+          </p>
+        </section>
+      )}
+
       {rounds.length > 0 && (
         <section>
           <h3 className="label mb-2">Funding history</h3>

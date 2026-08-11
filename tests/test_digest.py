@@ -252,3 +252,22 @@ def test_a_coverage_gap_is_flagged_even_when_companies_were_found() -> None:
 
     assert "Acme Health" in content
     assert "Could not search: Pharmaceuticals" in content
+
+
+def test_the_email_says_how_many_like_this_you_have_seen() -> None:
+    content = render_digest(
+        run(candidates=[candidate("Pretura Health")]),
+        "Healthcare AI",
+        contexts={"acc-1": "The 5th clinical workflow company you've seen — 1 of them fit."},
+    )
+
+    assert "5th clinical workflow company" in content
+
+
+def test_no_context_means_no_extra_line() -> None:
+    # Most companies are the first or second of their kind, and a digest only
+    # works while it stays short.
+    content = render_digest(run(candidates=[candidate("Lonely Co")]), "Healthcare AI")
+
+    assert "Lonely Co" in content
+    assert "company you've seen" not in content

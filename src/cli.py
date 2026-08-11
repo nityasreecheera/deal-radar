@@ -14,6 +14,7 @@ from src.candidates import (
     list_candidates,
 )
 from src.delivery import deliver
+from src.candidates import describe_category, quarter_start
 from src.digest import render_digest, save_digest
 from src.edgar import fetch_filings
 from src.pipeline import default_window, run_radar
@@ -58,7 +59,16 @@ def command_run(args: argparse.Namespace) -> int:
 
         known_after = count_seen(connection)
 
-    digest = render_digest(run, thesis.name)
+        # How each company sits against the ones like it. Worked out here
+        # because it needs the database, and while the connection is still open.
+        contexts = {
+            candidate.filing.accession: describe_category(
+                connection, candidate, since=quarter_start(end), theme=thesis.name
+            )
+            for candidate in run.interesting
+        }
+
+    digest = render_digest(run, thesis.name, contexts)
 
     print(digest)
 

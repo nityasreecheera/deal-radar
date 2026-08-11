@@ -20,6 +20,8 @@ from pydantic import BaseModel, Field
 
 from src.candidates import (
     StoredCandidate,
+    category_context,
+    category_counts,
     clear_verdict,
     count_by_verdict,
     count_unread,
@@ -31,6 +33,7 @@ from src.candidates import (
     list_candidates,
     mark_all_viewed,
     mark_viewed,
+    quarter_start,
     record_decision,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
@@ -117,6 +120,11 @@ class CompanyDetail(BaseModel):
 
     # Who the round is built for, from the smallest cheque it will accept.
     minimum_note: str | None = None
+
+    # How this company sits against the others of its kind. Empty below the
+    # threshold, which is most of the time.
+    category: str | None = None
+    category_note: str = ""
 
     shared_people: list[PersonLink] = Field(default_factory=list)
 
@@ -297,7 +305,16 @@ def get_detail(accession: str) -> CompanyDetail:
 
         days, age = round_age(found.first_sale_date, found.filed_date)
 
+        context = category_context(
+            connection,
+            found.category,
+            since=quarter_start(found.filed_date),
+            theme=found.theme,
+        )
+
         return CompanyDetail(
+            category=found.category,
+            category_note=context.describe(),
             candidate=found,
             days_open=days,
             age_note=age,
@@ -310,6 +327,30 @@ def get_detail(accession: str) -> CompanyDetail:
             progress_note=note,
             shared_people=shared_people(connection, accession),
         )
+
+
+@app.get("/api/categories", response_model=list[dict])
+def list_categories(
+    since: str | None = None,
+    theme: str | None = None,
+) -> list[dict]:
+    """
+    What kinds of company you are actually seeing, commonest first.
+
+    The rejection counts are the useful half. A category you have turned down
+    four times belongs in config/thesis.yaml, where it costs nothing, rather
+    than arriving every morning and being looked up at your expense.
+    """
+    with closing(connect()) as connection:
+        return [
+            {
+                "category": c.category,
+                "seen": c.seen,
+                "rejected": c.rejected,
+                "fitted": c.fitted,
+            }
+            for c in category_counts(connection, since=since, theme=theme)
+        ]
 
 
 @app.get("/api/people", response_model=list[dict])
