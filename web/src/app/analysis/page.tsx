@@ -86,22 +86,108 @@ export default function AnalysisPage() {
           <h2 className="font-display mb-1 text-[1.125rem]">
             Where companies come from
           </h2>
-          <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            The SEC industry group is the one thing known before a company costs
-            anything to look up. A group with no fits is a line you can delete
-            from the thesis file and stop paying for.
+          <p className="mb-6 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+            When a company files, it ticks one industry box. These are the boxes
+            the radar searches, and underneath each one is what those companies
+            actually turned out to be. This is the only thing known before a
+            company costs anything to look up, so it is the only place a change
+            saves money.
           </p>
 
-          <Table
-            head={["SEC group", "seen", "fit", "not healthcare"]}
-            rows={sources.map((source) => [
-              source.industry_group,
-              String(source.seen),
-              source.fitted ? String(source.fitted) : "—",
-              source.not_healthcare ? String(source.not_healthcare) : "—",
-            ])}
-            dim={sources.map((source) => source.fitted === 0)}
-          />
+          <div className="space-y-7">
+            {sources.map((source) => {
+              const slices = source.breakdown ?? [];
+              const worthless = source.fitted === 0;
+
+              return (
+                <div key={source.industry_group}>
+                  <div className="flex items-baseline justify-between gap-4 border-b border-[var(--color-rule)] pb-1">
+                    <h3
+                      className={`font-display text-[1rem] ${
+                        worthless ? "text-[var(--color-ink-faint)]" : ""
+                      }`}
+                    >
+                      {source.industry_group}
+                    </h3>
+
+                    <p className="text-[0.8125rem] text-[var(--color-ink-faint)]">
+                      <span className="tabular">{source.seen}</span> companies
+                      {source.fitted > 0 ? (
+                        <>
+                          {" · "}
+                          <span className="tabular text-[var(--color-fits)]">
+                            {source.fitted}
+                          </span>{" "}
+                          worth showing
+                        </>
+                      ) : (
+                        <span> · nothing worth showing</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {slices.length === 0 ? (
+                    <p className="pt-2 text-sm text-[var(--color-ink-faint)]">
+                      Searched, but nothing has ever been filed under it.
+                    </p>
+                  ) : (
+                    <ul className="pt-2">
+                      {slices.map((slice) => (
+                        <li
+                          key={slice.category}
+                          className="flex items-center gap-3 py-[3px] text-sm"
+                        >
+                          <span className="w-52 shrink-0 text-[var(--color-ink-soft)]">
+                            {slice.category}
+                          </span>
+
+                          <span
+                            className={`h-[9px] ${
+                              slice.fitted
+                                ? "bg-[var(--color-fits)]"
+                                : "bg-[var(--color-rule)]"
+                            }`}
+                            style={{
+                              width: `${
+                                source.seen
+                                  ? Math.max(
+                                      (260 * slice.seen) / source.seen,
+                                      3,
+                                    )
+                                  : 0
+                              }px`,
+                            }}
+                          />
+
+                          <span className="tabular text-[var(--color-ink-faint)]">
+                            {slice.seen}
+                            {slice.fitted > 0 && (
+                              <span className="text-[var(--color-fits)]">
+                                {"  "}
+                                {slice.fitted} fit
+                              </span>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="mt-6 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+            Boxes with nothing worth showing account for{" "}
+            <span className="tabular">
+              {sources
+                .filter((source) => source.fitted === 0)
+                .reduce((sum, source) => sum + source.seen, 0)}
+            </span>{" "}
+            companies fetched, looked up and judged. Those are the lines you
+            could delete from the thesis file.
+          </p>
+
         </section>
 
         <section>

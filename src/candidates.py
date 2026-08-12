@@ -758,14 +758,24 @@ def describe_rejection_clusters(
     )
 
 
+class CategorySlice(BaseModel):
+    """One kind of business found inside one SEC industry group."""
+
+    category: str
+    seen: int = 0
+    fitted: int = 0
+
+
 class SourceBreakdown(BaseModel):
     """
-    What one SEC industry group actually delivers.
+    What one SEC industry group actually delivers, broken down by what the
+    companies turn out to be.
 
-    The most useful table in the product, because the industry group is the only
+    The most useful view in the product, because the industry group is the only
     thing known *before* a company is looked up. Everything else — what it does,
-    whether it fits — costs a search and a model call to find out. A group that
-    has produced nothing can simply be switched off.
+    whether it fits — costs a search and a model call to find out. Seeing that a
+    box yields mostly drug companies, or mostly things that are not healthcare
+    at all, is what tells you whether to keep searching it.
     """
 
     industry_group: str
@@ -773,6 +783,7 @@ class SourceBreakdown(BaseModel):
     fitted: int = 0
     rejected: int = 0
     not_healthcare: int = 0
+    breakdown: list[CategorySlice] = Field(default_factory=list)
 
     @property
     def hit_rate(self) -> float:
@@ -782,8 +793,16 @@ class SourceBreakdown(BaseModel):
 def source_breakdown(
     connection: sqlite3.Connection,
     theme: str | None = None,
+    groups: list[str] | tuple[str, ...] | None = None,
 ) -> list[SourceBreakdown]:
-    """Which SEC industry groups are earning their keep, busiest first."""
+    """
+    Which SEC industry groups are earning their keep, and what comes out of each.
+
+    `groups` is the list being searched. Passing it includes boxes that have
+    produced nothing at all, which would otherwise be invisible — and a box
+    being searched for weeks with zero results is exactly what someone needs to
+    see.
+    """
     clauses = ["industry_group IS NOT NULL"]
     parameters: list[object] = []
 
@@ -794,27 +813,48 @@ def source_breakdown(
     rows = connection.execute(
         """
         SELECT industry_group,
+               COALESCE(category, 'unclear') AS category,
                COUNT(*) AS seen,
                SUM(COALESCE(user_verdict, verdict) = 'fits')   AS fitted,
-               SUM(COALESCE(user_verdict, verdict) = 'no_fit') AS rejected,
-               SUM(category = 'not healthcare')                AS not_healthcare
+               SUM(COALESCE(user_verdict, verdict) = 'no_fit') AS rejected
         FROM candidate
         WHERE """
         + " AND ".join(clauses)
-        + " GROUP BY industry_group ORDER BY seen DESC",
+        + " GROUP BY industry_group, category",
         parameters,
     ).fetchall()
 
-    return [
-        SourceBreakdown(
-            industry_group=row["industry_group"],
-            seen=row["seen"],
-            fitted=row["fitted"] or 0,
-            rejected=row["rejected"] or 0,
-            not_healthcare=row["not_healthcare"] or 0,
+    found: dict[str, SourceBreakdown] = {}
+
+    for row in rows:
+        source = found.setdefault(
+            row["industry_group"],
+            SourceBreakdown(industry_group=row["industry_group"]),
         )
-        for row in rows
-    ]
+
+        source.seen += row["seen"]
+        source.fitted += row["fitted"] or 0
+        source.rejected += row["rejected"] or 0
+
+        if row["category"] == "not healthcare":
+            source.not_healthcare += row["seen"]
+
+        source.breakdown.append(
+            CategorySlice(
+                category=row["category"],
+                seen=row["seen"],
+                fitted=row["fitted"] or 0,
+            )
+        )
+
+    # A searched box with nothing in it is a real finding, not an empty row.
+    for group in groups or ():
+        found.setdefault(group, SourceBreakdown(industry_group=group))
+
+    for source in found.values():
+        source.breakdown.sort(key=lambda slice_: -slice_.seen)
+
+    return sorted(found.values(), key=lambda s: -s.seen)
 
 
 def age_spread(connection: sqlite3.Connection, theme: str | None = None) -> dict:

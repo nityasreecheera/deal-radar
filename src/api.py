@@ -339,12 +339,19 @@ class CategoryRow(BaseModel):
     fitted: int = 0
 
 
+class CategorySliceRow(BaseModel):
+    category: str
+    seen: int = 0
+    fitted: int = 0
+
+
 class SourceRow(BaseModel):
     industry_group: str
     seen: int = 0
     fitted: int = 0
     rejected: int = 0
     not_healthcare: int = 0
+    breakdown: list[CategorySliceRow] = Field(default_factory=list)
 
 
 class Analysis(BaseModel):
@@ -383,6 +390,13 @@ def get_analysis(theme: str | None = None) -> Analysis:
             "SELECT MAX(filed_date) AS d FROM candidate"
         ).fetchone()["d"]
 
+        # The boxes currently being searched, so one that has produced nothing
+        # still appears. An empty row is the finding.
+        try:
+            searched_groups = list(load_thesis().sec_industry_groups)
+        except ThesisError:
+            searched_groups = []
+
         return Analysis(
             judged=judged,
             categories=[
@@ -401,8 +415,18 @@ def get_analysis(theme: str | None = None) -> Analysis:
                     fitted=s.fitted,
                     rejected=s.rejected,
                     not_healthcare=s.not_healthcare,
+                    breakdown=[
+                        CategorySliceRow(
+                            category=slice_.category,
+                            seen=slice_.seen,
+                            fitted=slice_.fitted,
+                        )
+                        for slice_ in s.breakdown
+                    ],
                 )
-                for s in source_breakdown(connection, theme=theme)
+                for s in source_breakdown(
+                    connection, theme=theme, groups=searched_groups
+                )
             ],
             round_age=age_spread(connection, theme=theme),
             overrides=disagreements(connection, theme=theme),
