@@ -76,7 +76,7 @@ export function ContactPanel({
             rel="noreferrer"
             className="mb-2 inline-block rounded border border-[var(--color-ink)] px-3 py-1 text-sm text-[var(--color-ink)] transition-colors hover:bg-[var(--color-ink)] hover:text-[var(--color-paper)]"
           >
-            Email in Gmail
+            Email
           </a>
         </>
       ) : (
