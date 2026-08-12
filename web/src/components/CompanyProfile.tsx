@@ -5,6 +5,7 @@ import {
   filingUrl,
   formatAmount,
   type Candidate,
+  type Detail,
 } from "@/lib/api";
 
 /**
@@ -13,7 +14,13 @@ import {
  * Lifted out of the list row when companies got their own page. The list is for
  * scanning; this is for deciding, and the two want different amounts of room.
  */
-export function CompanyProfile({ candidate }: { candidate: Candidate }) {
+export function CompanyProfile({
+  candidate,
+  detail,
+}: {
+  candidate: Candidate;
+  detail: Detail | null;
+}) {
   // Optional in the generated schema because the Pydantic field has a
   // default_factory, though the API always sends it.
   const people = candidate.people ?? [];
@@ -107,7 +114,7 @@ export function CompanyProfile({ candidate }: { candidate: Candidate }) {
         </p>
       )}
 
-      <CompanyDetail accession={candidate.accession} />
+      {detail && <CompanyDetail detail={detail} />}
 
       <div className="flex flex-wrap items-center gap-5 text-[0.75rem] text-[var(--color-ink-faint)]">
         {candidate.industry_group && <span>{candidate.industry_group}</span>}

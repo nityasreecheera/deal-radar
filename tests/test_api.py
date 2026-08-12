@@ -598,3 +598,63 @@ def test_a_nonsense_verdict_is_rejected() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_marking_a_company_as_emailed() -> None:
+    seed(candidate())
+
+    body = client.post(
+        "/api/candidates/acc-1/outreach",
+        json={"status": "emailed"},
+    ).json()
+
+    assert body["outreach_status"] == "emailed"
+    assert body["outreach_at"] is not None
+
+
+def test_clicking_the_same_status_again_clears_it() -> None:
+    seed(candidate())
+    client.post("/api/candidates/acc-1/outreach", json={"status": "emailed"})
+
+    body = client.post(
+        "/api/candidates/acc-1/outreach",
+        json={"status": ""},
+    ).json()
+
+    # A misclick has to be undoable.
+    assert body["outreach_status"] is None
+    assert body["outreach_at"] is None
+
+
+def test_an_invented_outreach_status_is_refused() -> None:
+    seed(candidate())
+
+    response = client.post(
+        "/api/candidates/acc-1/outreach",
+        json={"status": "ghosted"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_the_detail_offers_a_gmail_search_even_without_an_address() -> None:
+    # Knowing whether you already spoke to them does not depend on having
+    # found an address on their site.
+    seed(candidate())
+
+    body = client.get("/api/candidates/acc-1/detail").json()
+
+    assert body["compose_url"] is None
+    assert "mail.google.com" in body["gmail_search_url"]
+
+
+def test_a_compose_link_appears_once_an_address_is_known() -> None:
+    seed(candidate())
+    client.post(
+        "/api/candidates/acc-1/outreach",
+        json={"email": "hello@genomenon.com"},
+    )
+
+    body = client.get("/api/candidates/acc-1/detail").json()
+
+    assert "hello%40genomenon.com" in body["compose_url"]

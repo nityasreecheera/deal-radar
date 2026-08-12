@@ -188,6 +188,24 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     # What kind of business, so a company can be counted against the ones like
     # it rather than judged alone.
     ("candidate", "category", "ALTER TABLE candidate ADD COLUMN category TEXT"),
+    # Contact and outreach. Kept on the candidate rather than a table of its
+    # own: there is one company per filing and one address per company, and a
+    # join for that would be ceremony.
+    (
+        "candidate",
+        "contact_email",
+        "ALTER TABLE candidate ADD COLUMN contact_email TEXT",
+    ),
+    (
+        "candidate",
+        "outreach_status",
+        "ALTER TABLE candidate ADD COLUMN outreach_status TEXT",
+    ),
+    (
+        "candidate",
+        "outreach_at",
+        "ALTER TABLE candidate ADD COLUMN outreach_at TEXT",
+    ),
 )
 
 

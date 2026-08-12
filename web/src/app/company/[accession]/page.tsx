@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 
 import { CompanyProfile } from "@/components/CompanyProfile";
+import { ContactPanel } from "@/components/ContactPanel";
 import { DecisionPanel } from "@/components/DecisionPanel";
 import {
   VERDICT_LABEL,
@@ -12,6 +13,7 @@ import {
   formatLocation,
   isOverridden,
   type Candidate,
+  type Detail,
 } from "@/lib/api";
 
 /**
@@ -36,6 +38,7 @@ export default function CompanyPage({
   const { from } = use(searchParams);
 
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
   const [missing, setMissing] = useState(false);
 
   const backTo = from ? `/?${decodeURIComponent(from)}` : "/";
@@ -53,6 +56,15 @@ export default function CompanyPage({
         if (!response.ok) throw new Error(String(response.status));
 
         if (!cancelled) setCandidate((await response.json()) as Candidate);
+
+        const extra = await fetch(
+          `/api/candidates/${encodeURIComponent(accession)}/detail`,
+          { cache: "no-store" },
+        );
+
+        // Detail is a bonus, not the page. A company still reads fine without
+        // its funding history.
+        if (extra.ok && !cancelled) setDetail((await extra.json()) as Detail);
       } catch {
         if (!cancelled) setMissing(true);
       }
@@ -145,7 +157,7 @@ export default function CompanyPage({
       <main className="mx-auto w-full max-w-5xl flex-1 px-8 py-8">
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
           <div className="min-w-0 flex-1">
-            <CompanyProfile candidate={candidate} />
+            <CompanyProfile candidate={candidate} detail={detail} />
           </div>
 
           <aside className="w-full shrink-0 lg:sticky lg:top-8 lg:w-[19rem]">
@@ -153,6 +165,16 @@ export default function CompanyPage({
                 column, a top edge when it drops underneath. */}
             <div className="border-t border-[var(--color-rule)] pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
               <DecisionPanel candidate={candidate} onChange={setCandidate} />
+
+              {detail && (
+                <div className="mt-8">
+                  <ContactPanel
+                    candidate={candidate}
+                    detail={detail}
+                    onChange={setCandidate}
+                  />
+                </div>
+              )}
             </div>
           </aside>
         </div>

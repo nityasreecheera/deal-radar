@@ -1,53 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { FundingChart } from "@/components/FundingChart";
 import { formatAmount, type Detail } from "@/lib/api";
 
 /**
  * The parts of a company that only exist once you look across filings.
  *
- * Fetched when a row is opened rather than with the list, because most rows are
- * never opened and this costs a query each.
+ * Handed the detail rather than fetching it, because the contact panel needs the
+ * same object and two components fetching one endpoint is two requests to draw
+ * one page.
  */
-export function CompanyDetail({ accession }: { accession: string }) {
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const response = await fetch(
-          `/api/candidates/${encodeURIComponent(accession)}/detail`,
-          { cache: "no-store" },
-        );
-
-        if (!response.ok) throw new Error(String(response.status));
-
-        const body = (await response.json()) as Detail;
-
-        if (!cancelled) setDetail(body);
-      } catch {
-        if (!cancelled) setFailed(true);
-      }
-    }
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accession]);
-
-  if (failed) return null;
-
-  if (!detail) {
-    return <p className="label">Loading history</p>;
-  }
-
+export function CompanyDetail({ detail }: { detail: Detail }) {
   const rounds = detail.rounds ?? [];
   const people = detail.shared_people ?? [];
   const percent = detail.progress_percent;

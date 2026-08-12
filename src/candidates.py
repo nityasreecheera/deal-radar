@@ -62,6 +62,11 @@ class StoredCandidate(BaseModel):
     investor_count: int | None = None
     minimum_investment: int | None = None
     first_sale_date: str | None = None
+
+    # Where to write, and whether you have. Set by hand, never by the radar.
+    contact_email: str | None = None
+    outreach_status: str | None = None
+    outreach_at: str | None = None
     jurisdiction: str | None = None
     entity_type: str | None = None
     cik: str | None = None
@@ -901,3 +906,72 @@ def age_spread(connection: sqlite3.Connection, theme: str | None = None) -> dict
             buckets["over a year"] += 1
 
     return buckets
+
+
+# What can be recorded about reaching out. Deliberately short: this is a memory
+# aid, not a CRM, and a longer list would invite pretending the pipeline is
+# something it is not.
+OUTREACH_STATUSES = ("emailed", "replied", "meeting", "passed")
+
+
+def record_outreach(
+    connection: sqlite3.Connection,
+    accession: str,
+    status: str | None = None,
+    email: str | None = None,
+    at: str | None = None,
+) -> StoredCandidate | None:
+    """
+    Note that you contacted a company, or what came of it.
+
+    Set by a person, never by the radar. Nothing here is inferred from a mailbox
+    — the tool has no access to one — so this is an honest record of what
+    someone chose to write down rather than a guess at what happened.
+
+    Passing None leaves a field alone; an empty status clears it, so a mistaken
+    click can be undone.
+    """
+    if status is None and email is None:
+        return get_candidate(connection, accession)
+
+    sets: list[str] = []
+    parameters: list[object] = []
+
+    if status is not None:
+        cleaned = status.strip().lower()
+
+        if cleaned and cleaned not in OUTREACH_STATUSES:
+            raise ValueError(f"unknown outreach status: {status!r}")
+
+        sets.append("outreach_status = ?")
+        parameters.append(cleaned or None)
+
+        sets.append("outreach_at = ?")
+        parameters.append((at or datetime.now(UTC).isoformat()) if cleaned else None)
+
+    if email is not None:
+        sets.append("contact_email = ?")
+        parameters.append(email.strip() or None)
+
+    parameters.append(accession)
+
+    connection.execute(
+        f"UPDATE candidate SET {', '.join(sets)} WHERE accession = ?",
+        parameters,
+    )
+    connection.commit()
+
+    return get_candidate(connection, accession)
+
+
+def save_contact_email(
+    connection: sqlite3.Connection,
+    accession: str,
+    email: str | None,
+) -> None:
+    """Store an address found on a company's website."""
+    connection.execute(
+        "UPDATE candidate SET contact_email = ? WHERE accession = ?",
+        (email, accession),
+    )
+    connection.commit()

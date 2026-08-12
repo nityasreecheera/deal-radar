@@ -37,6 +37,7 @@ from src.candidates import (
     mark_viewed,
     quarter_start,
     record_decision,
+    record_outreach,
     source_breakdown,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
@@ -47,6 +48,7 @@ from src.funding import (
     round_age,
     round_progress,
 )
+from src.contact import gmail_compose_url, gmail_search_url
 from src.models import FitVerdict
 from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
@@ -128,6 +130,12 @@ class CompanyDetail(BaseModel):
     # threshold, which is most of the time.
     category: str | None = None
     category_note: str = ""
+
+    # Links, not integrations. Compose opens Gmail with the address filled in;
+    # search opens Gmail looking for anything already exchanged with the
+    # company's domain. Neither reads a mailbox — the tool has no access to one.
+    compose_url: str | None = None
+    gmail_search_url: str | None = None
 
     shared_people: list[PersonLink] = Field(default_factory=list)
 
@@ -315,7 +323,27 @@ def get_detail(accession: str) -> CompanyDetail:
             theme=found.theme,
         )
 
+        domain = None
+
+        if found.website:
+            from src.contact import registrable_domain
+
+            domain = registrable_domain(found.website) or None
+
         return CompanyDetail(
+            compose_url=(
+                gmail_compose_url(
+                    found.contact_email,
+                    subject=f"{found.company_name} — Form D",
+                )
+                if found.contact_email
+                else None
+            ),
+            gmail_search_url=(
+                gmail_search_url(domain or found.company_name)
+                if (domain or found.company_name)
+                else None
+            ),
             category=found.category,
             category_note=context.describe(),
             candidate=found,
@@ -368,6 +396,50 @@ class Analysis(BaseModel):
     round_age: dict[str, int] = Field(default_factory=dict)
     overrides: list[StoredCandidate] = Field(default_factory=list)
     clusters: str = ""
+
+
+class Outreach(BaseModel):
+    """What a person wants recorded about contacting a company."""
+
+    # Empty string clears it, so a mistaken click can be undone.
+    status: str | None = None
+    email: str | None = None
+
+
+@app.post(
+    "/api/candidates/{accession}/outreach",
+    response_model=StoredCandidate,
+    responses={404: {"model": ErrorBody}, 422: {"model": ErrorBody}},
+)
+def record_one_outreach(accession: str, outreach: Outreach) -> StoredCandidate:
+    """
+    Note that you contacted a company, or what came of it.
+
+    Written by a person. Nothing here is inferred from a mailbox, because the
+    tool has no access to one — so this records what someone chose to write
+    down rather than guessing at what happened.
+    """
+    try:
+        with closing(connect()) as connection:
+            updated = record_outreach(
+                connection,
+                accession,
+                status=outreach.status,
+                email=outreach.email,
+            )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"ok": False, "errors": [str(exc)]},
+        ) from exc
+
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"ok": False, "errors": [f"no judgement for '{accession}'"]},
+        )
+
+    return updated
 
 
 @app.get("/api/analysis", response_model=Analysis)
