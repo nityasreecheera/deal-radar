@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
@@ -223,6 +224,13 @@ function CandidateList() {
           <h1 className="font-display text-[1.75rem] leading-none tracking-tight">
             Deal Radar
           </h1>
+
+          <Link
+            href="/analysis"
+            className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+          >
+            Analysis →
+          </Link>
 
           <p className="label">
             {meta ? (

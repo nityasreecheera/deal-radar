@@ -10,6 +10,7 @@ export type CandidateList = Schemas["CandidateList"];
 export type ChatAnswer = Schemas["ChatAnswer"];
 export type Detail = Schemas["CompanyDetail"];
 export type FundingRound = Schemas["FundingRound"];
+export type Analysis = Schemas["Analysis"];
 export type Verdict = Candidate["verdict"];
 
 export const VERDICTS: Verdict[] = ["fits", "maybe", "unknown", "no_fit"];

@@ -756,3 +756,108 @@ def describe_rejection_clusters(
         f"This quarter: {named} — all passed. "
         f"That's {total} companies looked up to reject. Worth a thesis rule?"
     )
+
+
+class SourceBreakdown(BaseModel):
+    """
+    What one SEC industry group actually delivers.
+
+    The most useful table in the product, because the industry group is the only
+    thing known *before* a company is looked up. Everything else — what it does,
+    whether it fits — costs a search and a model call to find out. A group that
+    has produced nothing can simply be switched off.
+    """
+
+    industry_group: str
+    seen: int = 0
+    fitted: int = 0
+    rejected: int = 0
+    not_healthcare: int = 0
+
+    @property
+    def hit_rate(self) -> float:
+        return (self.fitted / self.seen) if self.seen else 0.0
+
+
+def source_breakdown(
+    connection: sqlite3.Connection,
+    theme: str | None = None,
+) -> list[SourceBreakdown]:
+    """Which SEC industry groups are earning their keep, busiest first."""
+    clauses = ["industry_group IS NOT NULL"]
+    parameters: list[object] = []
+
+    if theme:
+        clauses.append("theme = ?")
+        parameters.append(theme)
+
+    rows = connection.execute(
+        """
+        SELECT industry_group,
+               COUNT(*) AS seen,
+               SUM(COALESCE(user_verdict, verdict) = 'fits')   AS fitted,
+               SUM(COALESCE(user_verdict, verdict) = 'no_fit') AS rejected,
+               SUM(category = 'not healthcare')                AS not_healthcare
+        FROM candidate
+        WHERE """
+        + " AND ".join(clauses)
+        + " GROUP BY industry_group ORDER BY seen DESC",
+        parameters,
+    ).fetchall()
+
+    return [
+        SourceBreakdown(
+            industry_group=row["industry_group"],
+            seen=row["seen"],
+            fitted=row["fitted"] or 0,
+            rejected=row["rejected"] or 0,
+            not_healthcare=row["not_healthcare"] or 0,
+        )
+        for row in rows
+    ]
+
+
+def age_spread(connection: sqlite3.Connection, theme: str | None = None) -> dict:
+    """
+    How old rounds are by the time they reach you.
+
+    Counts only rows with a first-sale date; the rest genuinely do not say. The
+    buckets are coarse on purpose — the question is "is this fresh or has it
+    been running for months", not the exact number of days.
+    """
+    clauses = ["first_sale_date IS NOT NULL"]
+    parameters: list[object] = []
+
+    if theme:
+        clauses.append("theme = ?")
+        parameters.append(theme)
+
+    rows = connection.execute(
+        "SELECT julianday(filed_date) - julianday(first_sale_date) AS days "
+        "FROM candidate WHERE " + " AND ".join(clauses),
+        parameters,
+    ).fetchall()
+
+    buckets = {
+        "under 2 weeks": 0,
+        "2 weeks to 3 months": 0,
+        "3 to 12 months": 0,
+        "over a year": 0,
+    }
+
+    for row in rows:
+        days = row["days"]
+
+        if days is None or days < 0:
+            continue
+
+        if days <= 14:
+            buckets["under 2 weeks"] += 1
+        elif days <= 90:
+            buckets["2 weeks to 3 months"] += 1
+        elif days <= 365:
+            buckets["3 to 12 months"] += 1
+        else:
+            buckets["over a year"] += 1
+
+    return buckets

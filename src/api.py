@@ -20,12 +20,14 @@ from pydantic import BaseModel, Field
 
 from src.candidates import (
     StoredCandidate,
+    age_spread,
     category_context,
     category_counts,
     clear_verdict,
     count_by_verdict,
     count_unread,
     date_range,
+    describe_rejection_clusters,
     disagreements,
     find_by_company,
     get_candidate,
@@ -35,6 +37,7 @@ from src.candidates import (
     mark_viewed,
     quarter_start,
     record_decision,
+    source_breakdown,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
 from src.funding import (
@@ -326,6 +329,88 @@ def get_detail(accession: str) -> CompanyDetail:
             progress_percent=percent,
             progress_note=note,
             shared_people=shared_people(connection, accession),
+        )
+
+
+class CategoryRow(BaseModel):
+    category: str
+    seen: int = 0
+    rejected: int = 0
+    fitted: int = 0
+
+
+class SourceRow(BaseModel):
+    industry_group: str
+    seen: int = 0
+    fitted: int = 0
+    rejected: int = 0
+    not_healthcare: int = 0
+
+
+class Analysis(BaseModel):
+    """
+    The whole picture, rather than one company at a time.
+
+    Assembled in one response because the page shows them together and three
+    round trips to draw one screen is three chances to render half a page.
+    """
+
+    judged: int = 0
+    categories: list[CategoryRow] = Field(default_factory=list)
+    sources: list[SourceRow] = Field(default_factory=list)
+    round_age: dict[str, int] = Field(default_factory=dict)
+    overrides: list[StoredCandidate] = Field(default_factory=list)
+    clusters: str = ""
+
+
+@app.get("/api/analysis", response_model=Analysis)
+def get_analysis(theme: str | None = None) -> Analysis:
+    """
+    Everything the analysis page shows.
+
+    The source table is the one that pays for itself: the SEC industry group is
+    the only thing known before a company costs anything to look up, so a group
+    with no fits is a line you can delete from config/thesis.yaml.
+    """
+    with closing(connect()) as connection:
+        judged = connection.execute(
+            "SELECT COUNT(*) AS n FROM candidate"
+            + (" WHERE theme = ?" if theme else ""),
+            (theme,) if theme else (),
+        ).fetchone()["n"]
+
+        latest = connection.execute(
+            "SELECT MAX(filed_date) AS d FROM candidate"
+        ).fetchone()["d"]
+
+        return Analysis(
+            judged=judged,
+            categories=[
+                CategoryRow(
+                    category=c.category,
+                    seen=c.seen,
+                    rejected=c.rejected,
+                    fitted=c.fitted,
+                )
+                for c in category_counts(connection, theme=theme)
+            ],
+            sources=[
+                SourceRow(
+                    industry_group=s.industry_group,
+                    seen=s.seen,
+                    fitted=s.fitted,
+                    rejected=s.rejected,
+                    not_healthcare=s.not_healthcare,
+                )
+                for s in source_breakdown(connection, theme=theme)
+            ],
+            round_age=age_spread(connection, theme=theme),
+            overrides=disagreements(connection, theme=theme),
+            clusters=describe_rejection_clusters(
+                connection,
+                since=quarter_start(latest) if latest else None,
+                theme=theme,
+            ),
         )
 
 
