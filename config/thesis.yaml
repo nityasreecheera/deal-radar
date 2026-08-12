@@ -65,7 +65,17 @@ exclude:
 # threshold would have removed anyway.
 filters:
   # A $39 offering is a nominal filing, not a fundraise. Observed in real data.
-  min_offering_amount: 500000
+  #
+  # Lowered from 500k to 100k on 2026-08-12. At 500k the radar was dropping
+  # about 41 companies a month unseen, and one of them was RevenueLens.ai — a
+  # $360k raise whose name points straight at revenue cycle automation, which
+  # is the second line of the include list. A pre-seed healthcare software
+  # company raising 300k is exactly the kind of thing this is meant to find
+  # first; 500k was quietly excluding the early end of the thesis.
+  #
+  # Costs about 17% more lookups a month, which stays inside the free tier.
+  # Below 100k the filings are overwhelmingly nominal rather than early.
+  min_offering_amount: 100000
 
   # An amendment restates a round already reported, so the company is not new.
   exclude_amendments: true
