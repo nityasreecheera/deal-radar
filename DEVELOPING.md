@@ -225,6 +225,30 @@ with React's `use()`.
 The question box has no tools at all, so it can't search or research anything. That's
 a capability restriction, not an instruction — there's nothing to talk it out of.
 
+### Signing in, and the two ways past the gate
+
+A **session cookie** for people and **Basic auth** for scripts, both checked in
+`web/src/proxy.ts`.
+
+Basic auth has no logout. The browser caches the credentials for the life of the
+window and there is no standard way to ask it to forget them, so a sign-out button
+on top of Basic auth is a button that does nothing. Hence the cookie: an issue time
+plus an HMAC of that time, keyed on `SHARE_PASSWORD`. Nothing is stored server-side,
+and changing the password invalidates every session already issued.
+
+Basic auth stays because `curl`, the deploy checks and `share.sh` have no business
+with a login form.
+
+Unauthenticated requests are answered differently on purpose: `/api/*` gets a 401,
+a page gets a redirect to `/login`. `share.sh` refuses to publish until an
+unauthenticated request is rejected, and a redirect is not a rejection it can tell
+apart from a working site — so it checks `/api/meta` rather than the homepage.
+
+**Redirects out of the auth routes are relative.** Behind the tunnel `request.url`
+is the VM's own address, so `NextResponse.redirect(new URL(path, request.url))`
+sends people to `https://localhost:3100/…`. That works perfectly while testing on
+the VM and is a dead link for everyone else.
+
 ### Sharing it
 
 The site lives at a permanent address:
@@ -345,6 +369,7 @@ writes is whether you have read a row.
 | [src/api.py](src/api.py) | HTTP for the website; almost entirely read-only |
 | [src/cli.py](src/cli.py) | the command surface |
 | [web/](web/) | the website — Next.js, types generated from the API |
+| [web/src/proxy.ts](web/src/proxy.ts) | the password gate; `middleware.ts` is deprecated in Next 16 and renamed to `proxy` |
 
 Frontend types come from the API's schema, so `src/models.py` is the only place a field
 gets defined and there's nothing to drift:

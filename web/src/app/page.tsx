@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AskBox } from "@/components/AskBox";
 import { CandidateRow } from "@/components/CandidateRow";
+import { LogoutButton } from "@/components/LogoutButton";
 import {
   VERDICTS,
   VERDICT_LABEL,
@@ -225,12 +226,16 @@ function CandidateList() {
             Deal Radar
           </h1>
 
-          <Link
-            href="/analysis"
-            className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            Analysis →
-          </Link>
+          <span className="flex items-baseline gap-5">
+            <Link
+              href="/analysis"
+              className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              Analysis →
+            </Link>
+
+            <LogoutButton />
+          </span>
 
           <p className="label">
             {meta ? (
