@@ -35,6 +35,7 @@ from src.candidates import (
     list_candidates,
     mark_all_viewed,
     mark_viewed,
+    market_view,
     quarter_start,
     record_decision,
     record_outreach,
@@ -382,6 +383,25 @@ class SourceRow(BaseModel):
     breakdown: list[CategorySliceRow] = Field(default_factory=list)
 
 
+class DealSizesRow(BaseModel):
+    count: int = 0
+    median: int | None = None
+    lower_quartile: int | None = None
+    upper_quartile: int | None = None
+    smallest: int | None = None
+    largest: int | None = None
+
+
+class Market(BaseModel):
+    """What the filings say about the market, rather than about the radar."""
+
+    companies: int = 0
+    deal_sizes: DealSizesRow = Field(default_factory=DealSizesRow)
+    by_category: dict[str, DealSizesRow] = Field(default_factory=dict)
+    company_age: dict[str, int] = Field(default_factory=dict)
+    locations: list[dict] = Field(default_factory=list)
+
+
 class Analysis(BaseModel):
     """
     The whole picture, rather than one company at a time.
@@ -391,6 +411,7 @@ class Analysis(BaseModel):
     """
 
     judged: int = 0
+    market: Market = Field(default_factory=Market)
     categories: list[CategoryRow] = Field(default_factory=list)
     sources: list[SourceRow] = Field(default_factory=list)
     round_age: dict[str, int] = Field(default_factory=dict)
@@ -469,8 +490,20 @@ def get_analysis(theme: str | None = None) -> Analysis:
         except ThesisError:
             searched_groups = []
 
+        seen = market_view(connection, theme=theme)
+
         return Analysis(
             judged=judged,
+            market=Market(
+                companies=seen.companies,
+                deal_sizes=DealSizesRow(**seen.deal_sizes.model_dump()),
+                by_category={
+                    name: DealSizesRow(**sizes.model_dump())
+                    for name, sizes in seen.by_category.items()
+                },
+                company_age=seen.company_age,
+                locations=seen.locations,
+            ),
             categories=[
                 CategoryRow(
                     category=c.category,

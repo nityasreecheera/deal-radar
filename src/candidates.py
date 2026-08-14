@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import statistics
 from contextlib import closing
 from datetime import UTC, datetime
 
@@ -975,3 +976,143 @@ def save_contact_email(
         (email, accession),
     )
     connection.commit()
+
+
+# Below this a median is a coincidence rather than a benchmark. Eight is not a
+# magic number; it is the point where quoting "the typical raise" stops feeling
+# like a lie.
+MIN_FOR_A_BENCHMARK = 8
+
+# Categories that describe something other than the market being tracked. A
+# median that includes animation studios is not a healthcare benchmark.
+NON_MARKET_CATEGORIES = ("not healthcare", "unclear")
+
+
+class DealSizes(BaseModel):
+    """
+    What a raise looks like in this market.
+
+    The most useful thing on the page for someone doing the work rather than
+    tuning the tool: when a company turns up raising $8m, "is that normal here"
+    becomes a question with an answer.
+
+    Robust to incomplete coverage in a way a trend line is not. A median over
+    140 companies stays roughly a median even if a week of filings was missed;
+    a month-over-month chart would show that missed week as a market downturn.
+    """
+
+    count: int = 0
+    median: int | None = None
+    lower_quartile: int | None = None
+    upper_quartile: int | None = None
+    smallest: int | None = None
+    largest: int | None = None
+
+
+def summarise_amounts(amounts: list[int]) -> DealSizes:
+    """Quartiles from a list of raises, or empties when there are too few."""
+    usable = sorted(a for a in amounts if a and a > 0)
+
+    if len(usable) < MIN_FOR_A_BENCHMARK:
+        return DealSizes(count=len(usable))
+
+    quartiles = statistics.quantiles(usable, n=4)
+
+    return DealSizes(
+        count=len(usable),
+        median=int(statistics.median(usable)),
+        lower_quartile=int(quartiles[0]),
+        upper_quartile=int(quartiles[2]),
+        smallest=usable[0],
+        largest=usable[-1],
+    )
+
+
+class MarketView(BaseModel):
+    """The market as seen from the filings, rather than the radar's own health."""
+
+    companies: int = 0
+    deal_sizes: DealSizes = Field(default_factory=DealSizes)
+    by_category: dict[str, DealSizes] = Field(default_factory=dict)
+    company_age: dict[str, int] = Field(default_factory=dict)
+    locations: list[dict] = Field(default_factory=list)
+
+
+def market_view(
+    connection: sqlite3.Connection,
+    theme: str | None = None,
+    this_year: int | None = None,
+) -> MarketView:
+    """
+    What the filings say about the market, ignoring everything that is not it.
+
+    Companies categorised "not healthcare" or "unclear" are excluded throughout.
+    They are real filings and they cost real money to look up, but they are not
+    part of the market anyone is trying to understand, and a median that
+    includes an animation studio is not a healthcare benchmark.
+    """
+    clauses = [
+        "category IS NOT NULL",
+        f"category NOT IN ({', '.join('?' for _ in NON_MARKET_CATEGORIES)})",
+    ]
+    parameters: list[object] = list(NON_MARKET_CATEGORIES)
+
+    if theme:
+        clauses.append("theme = ?")
+        parameters.append(theme)
+
+    rows = connection.execute(
+        "SELECT category, offering_amount, state, incorporated, filed_date "
+        "FROM candidate WHERE " + " AND ".join(clauses),
+        parameters,
+    ).fetchall()
+
+    if not rows:
+        return MarketView()
+
+    year = this_year or int(max(r["filed_date"] for r in rows)[:4])
+
+    per_category: dict[str, list[int]] = {}
+    ages = {"founded this year": 0, "1 to 2 years": 0, "3 to 5 years": 0, "older": 0}
+    places: dict[str, int] = {}
+
+    for row in rows:
+        if row["offering_amount"]:
+            per_category.setdefault(row["category"], []).append(
+                row["offering_amount"]
+            )
+
+        if row["incorporated"]:
+            age = year - row["incorporated"]
+            key = (
+                "founded this year"
+                if age <= 0
+                else "1 to 2 years"
+                if age <= 2
+                else "3 to 5 years"
+                if age <= 5
+                else "older"
+            )
+            ages[key] += 1
+
+        if row["state"]:
+            places[row["state"]] = places.get(row["state"], 0) + 1
+
+    every_amount = [a for amounts in per_category.values() for a in amounts]
+
+    return MarketView(
+        companies=len(rows),
+        deal_sizes=summarise_amounts(every_amount),
+        by_category={
+            category: summarise_amounts(amounts)
+            for category, amounts in per_category.items()
+            if len(amounts) >= MIN_FOR_A_BENCHMARK
+        },
+        company_age=ages,
+        locations=[
+            {"state": state, "companies": count}
+            for state, count in sorted(
+                places.items(), key=lambda item: -item[1]
+            )[:8]
+        ],
+    )
