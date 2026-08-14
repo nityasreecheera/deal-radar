@@ -1,0 +1,47 @@
+# Energy and climate.
+#
+# Group names verified against live EDGAR before being written here. "Electric
+# Utilities", "Oil & Gas" and "Coal Mining" all return zero — the SEC spells the
+# conjunction "and", not "&", and a mistyped group is a search that quietly
+# finds nothing forever.
+
+domain: Energy
+
+name: Energy, climate and grid technology
+
+sec_industry_groups:
+  - Other Energy
+  - Energy Conservation
+  - Environmental Services
+  - Other Technology
+
+description: >
+  Companies building the machinery and software of the energy transition —
+  generation, storage, grid, and the tools that make them work. Both hardware
+  and software count here; the domain is the point, not the form factor.
+
+include:
+  - batteries, storage, and the materials that go into them
+  - grid software, demand response, and virtual power plants
+  - solar, wind, geothermal, and nuclear technology
+  - carbon capture, measurement, and removal
+  - electrification of heat, industry, and transport
+  - efficiency and monitoring software sold to utilities or industry
+
+exclude:
+  - oil and gas extraction and services
+  - mineral exploration and mining ventures
+  - real-estate vehicles that happen to own solar panels
+  - carbon credit brokerages and offset resellers
+  - consumer sustainability apps and marketplaces
+
+filters:
+  min_offering_amount: 100000
+  exclude_amendments: true
+  exclude_name_patterns:
+    - fund
+    - ventures
+    - spv
+    - capital partners
+    - holdings llc
+    - royalty

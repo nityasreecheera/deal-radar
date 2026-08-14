@@ -1,0 +1,50 @@
+# AI infrastructure — the physical layer.
+#
+# Deliberately the complement of ai-tools.yaml, not an overlap. That thesis is
+# software other people build on, and explicitly excludes hardware. This one is
+# the machinery underneath: chips, servers, networking, power and cooling.
+#
+# Named separately because they behave nothing alike. AI tools companies raise a
+# few hundred thousand at incorporation; the compute companies in this space
+# raise hundreds of millions — Oxide Computer filed $445m and Cornelis Networks
+# $245m, both of which the healthcare radar found and discarded.
+
+domain: AI infra
+
+name: AI compute, chips and datacentre infrastructure
+
+sec_industry_groups:
+  - Other Technology
+  - Computers
+  - Manufacturing
+  - Telecommunications
+
+description: >
+  Companies making the physical layer that AI runs on. Silicon, systems,
+  interconnect, and the power and cooling that make a datacentre possible. The
+  product is a thing you can touch, or the silicon design behind it.
+
+include:
+  - semiconductors, accelerators, and chip design
+  - servers, systems, and rack-scale compute
+  - networking and interconnect for training clusters
+  - memory, storage, and photonics
+  - datacentre power, cooling, and siting
+  - advanced packaging and semiconductor manufacturing equipment
+
+exclude:
+  - software with no hardware product, which belongs to AI tools
+  - consumer electronics and devices
+  - crypto mining operations and hosting
+  - IT resellers, integrators, and datacentre landlords
+  - telecom carriers and internet service providers
+
+filters:
+  min_offering_amount: 100000
+  exclude_amendments: true
+  exclude_name_patterns:
+    - fund
+    - ventures
+    - spv
+    - capital partners
+    - holdings llc

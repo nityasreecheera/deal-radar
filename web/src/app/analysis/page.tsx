@@ -96,6 +96,7 @@ export default function AnalysisPage() {
 
   // Typed rather than `?? {}`: an empty object literal widens to `{}` and
   // every field below it becomes an error.
+  const domains = data.domains ?? [];
   const market: Market = data.market ?? { companies: 0, excluded: 0 };
   const sizes: DealSizes = market.deal_sizes ?? { count: 0 };
   const ages = market.company_age ?? {};
@@ -148,6 +149,32 @@ export default function AnalysisPage() {
       </header>
 
       <main className="mx-auto w-full max-w-4xl flex-1 space-y-12 px-8 py-10">
+        {/* Every domain at a glance. First, because "what am I even covering"
+            comes before any number about one of them. */}
+        {domains.length > 1 && (
+          <section>
+            <h2 className="font-display mb-1 text-[1.125rem]">
+              What each domain has found
+            </h2>
+            <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+              Every set of criteria the radar is running, and what has come out
+              of each. A domain with nothing next to it has been set up but has
+              not run yet.
+            </p>
+
+            <Table
+              head={["domain", "companies", "worth showing", "rejected", "couldn't tell"]}
+              rows={domains.map((row) => [
+                row.domain,
+                row.judged ? String(row.judged) : "not run yet",
+                row.fitted ? String(row.fitted) : "—",
+                row.rejected ? String(row.rejected) : "—",
+                row.unknown ? String(row.unknown) : "—",
+              ])}
+              dim={domains.map((row) => !row.judged)}
+            />
+          </section>
+        )}
         {/* The market, not the machine. What an analyst came here for. */}
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">

@@ -1,0 +1,51 @@
+# Financial infrastructure and payments.
+#
+# The industry groups here are the dangerous ones. "Pooled Investment Fund"
+# returns 3,775 filings a month — it is where every fund and SPV in America
+# files, and including it would bury the domain in vehicles rather than
+# companies. It is deliberately absent, and the name filters below are the
+# second line of defence.
+
+domain: Fintech
+
+name: Financial infrastructure and payments
+
+sec_industry_groups:
+  - Other Banking and Financial Services
+  - Commercial Banking
+  - Insurance
+  - Investment Banking
+  - Other Technology
+
+description: >
+  Companies building the plumbing of finance — moving money, extending credit,
+  underwriting risk, and the software banks and insurers run on. The product is
+  software or a licensed financial service, not a fund.
+
+include:
+  - payments, transfers, and money movement infrastructure
+  - banking-as-a-service and core banking software
+  - lending, underwriting, and credit decisioning
+  - insurance technology and claims automation
+  - compliance, KYC, fraud, and risk tooling
+  - treasury, accounting, and back-office automation
+
+exclude:
+  - funds, SPVs, and pooled investment vehicles of every kind
+  - crypto exchanges, token issuance, and trading venues
+  - retail brokerages and consumer trading apps
+  - real-estate syndications and mortgage pools
+  - financial advisory and wealth management practices
+
+filters:
+  min_offering_amount: 100000
+  exclude_amendments: true
+  exclude_name_patterns:
+    - fund
+    - ventures
+    - spv
+    - capital partners
+    - holdings llc
+    - partners lp
+    - opportunity
+    - realty

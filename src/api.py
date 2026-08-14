@@ -35,6 +35,7 @@ from src.candidates import (
     list_candidates,
     mark_all_viewed,
     mark_viewed,
+    domain_tallies,
     market_view,
     quarter_start,
     record_decision,
@@ -403,6 +404,15 @@ class Market(BaseModel):
     locations: list[dict] = Field(default_factory=list)
 
 
+class DomainRow(BaseModel):
+    domain: str
+    judged: int = 0
+    fitted: int = 0
+    rejected: int = 0
+    unknown: int = 0
+    latest_filing: str | None = None
+
+
 class Analysis(BaseModel):
     """
     The whole picture, rather than one company at a time.
@@ -412,6 +422,7 @@ class Analysis(BaseModel):
     """
 
     judged: int = 0
+    domains: list[DomainRow] = Field(default_factory=list)
     market: Market = Field(default_factory=Market)
     categories: list[CategoryRow] = Field(default_factory=list)
     sources: list[SourceRow] = Field(default_factory=list)
@@ -493,8 +504,17 @@ def get_analysis(theme: str | None = None) -> Analysis:
 
         seen = market_view(connection, theme=theme)
 
+        try:
+            configured = available_themes()
+        except ThesisError:
+            configured = []
+
         return Analysis(
             judged=judged,
+            domains=[
+                DomainRow(**tally.model_dump())
+                for tally in domain_tallies(connection, configured)
+            ],
             market=Market(
                 companies=seen.companies,
                 excluded=seen.excluded,

@@ -1207,3 +1207,62 @@ def market_view(
             )[:8]
         ],
     )
+
+
+class DomainTally(BaseModel):
+    """How much one domain has found, for a page listing all of them."""
+
+    domain: str
+    judged: int = 0
+    fitted: int = 0
+    rejected: int = 0
+    unknown: int = 0
+    latest_filing: str | None = None
+
+    @property
+    def has_run(self) -> bool:
+        return self.judged > 0
+
+
+def domain_tallies(
+    connection: sqlite3.Connection,
+    configured: list[str] | tuple[str, ...] | None = None,
+) -> list[DomainTally]:
+    """
+    Every domain and what it has turned up, busiest first.
+
+    `configured` is the list of thesis files on disk. Passing it includes a
+    domain that has never run — which is the state a newly added one is in, and
+    exactly when someone wants to see it listed rather than wonder whether the
+    file took effect.
+    """
+    rows = connection.execute(
+        """
+        SELECT theme,
+               COUNT(*) AS judged,
+               SUM(COALESCE(user_verdict, verdict) = 'fits')    AS fitted,
+               SUM(COALESCE(user_verdict, verdict) = 'no_fit')  AS rejected,
+               SUM(COALESCE(user_verdict, verdict) = 'unknown') AS unknown,
+               MAX(filed_date) AS latest
+        FROM candidate
+        WHERE theme IS NOT NULL
+        GROUP BY theme
+        """
+    ).fetchall()
+
+    found = {
+        row["theme"]: DomainTally(
+            domain=row["theme"],
+            judged=row["judged"],
+            fitted=row["fitted"] or 0,
+            rejected=row["rejected"] or 0,
+            unknown=row["unknown"] or 0,
+            latest_filing=row["latest"],
+        )
+        for row in rows
+    }
+
+    for domain in configured or ():
+        found.setdefault(domain, DomainTally(domain=domain))
+
+    return sorted(found.values(), key=lambda tally: (-tally.judged, tally.domain))
