@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { type Analysis, type DealSizes, type Market } from "@/lib/api";
+import {
+  type Analysis,
+  type DealSizes,
+  type Market,
+  type Meta,
+} from "@/lib/api";
 
 /**
  * The market, as the filings describe it.
@@ -22,23 +27,52 @@ import { type Analysis, type DealSizes, type Market } from "@/lib/api";
  */
 export default function AnalysisPage() {
   const [data, setData] = useState<Analysis | null>(null);
+  const [meta, setMeta] = useState<Meta | null>(null);
   const [failed, setFailed] = useState(false);
 
+  // Empty means every domain at once. Worth having as the default: the whole
+  // point of a benchmark is a big enough sample, and splitting one domain into
+  // two halves the numbers behind every figure on the page.
+  const [domain, setDomain] = useState("");
+
   useEffect(() => {
+    async function loadMeta() {
+      try {
+        const response = await fetch("/api/meta", { cache: "no-store" });
+
+        if (response.ok) setMeta((await response.json()) as Meta);
+      } catch {
+        // The domain picker is a convenience; the page still works without it.
+      }
+    }
+
+    void loadMeta();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       try {
-        const response = await fetch("/api/analysis", { cache: "no-store" });
+        const response = await fetch(
+          `/api/analysis${domain ? `?theme=${encodeURIComponent(domain)}` : ""}`,
+          { cache: "no-store" },
+        );
 
         if (!response.ok) throw new Error(String(response.status));
 
-        setData((await response.json()) as Analysis);
+        if (!cancelled) setData((await response.json()) as Analysis);
       } catch {
-        setFailed(true);
+        if (!cancelled) setFailed(true);
       }
     }
 
     void load();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [domain]);
 
   if (failed) {
     return (
@@ -82,11 +116,33 @@ export default function AnalysisPage() {
             Analysis
           </h1>
 
-          <p className="mt-2 text-[0.8125rem] text-[var(--color-ink-faint)]">
-            <span className="tabular">{data.judged}</span> companies looked at
-            so far. Every number on this page comes from decisions the filter
-            made, not decisions you made — you haven&apos;t changed any of its
-            verdicts yet.
+          <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-3">
+            <label>
+              <span className="label mb-1 block">Domain</span>
+              <select
+                value={domain}
+                onChange={(event) => setDomain(event.target.value)}
+                className="field pr-6"
+              >
+                <option value="">All domains</option>
+                {(meta?.themes ?? []).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <p className="text-[0.8125rem] text-[var(--color-ink-faint)]">
+              <span className="tabular">{data.judged}</span> companies looked at
+              {domain ? ` in ${domain}` : " across every domain"}.
+            </p>
+          </div>
+
+          <p className="mt-3 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+            Every number on this page comes from decisions the filter made, not
+            decisions you made — you haven&apos;t changed any of its verdicts
+            yet.
           </p>
         </div>
       </header>

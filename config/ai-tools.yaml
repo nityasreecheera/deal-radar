@@ -1,0 +1,56 @@
+# AI software and developer tools.
+#
+# The second domain. Same structure as thesis.yaml, and the same warning: these
+# criteria are a guess, not a mandate.
+#
+# Where it came from: the healthcare radar was already finding these companies
+# and throwing them away. Categorising 112 discarded filings turned up 11 doing
+# AI software and 8 doing developer tools — found by accident, while looking for
+# something else. A search actually aimed at them should find considerably more.
+#
+# What it deliberately is not: "AI companies". Almost every company filing today
+# claims AI somewhere, so a thesis built on the word would match everything and
+# mean nothing. The line here is that the product is software other people build
+# on or work in.
+
+domain: AI tools
+
+name: AI software and developer tools
+
+# The same three technology boxes the healthcare search already sweeps, which is
+# where this kind of company files. No point adding the health-specific ones.
+sec_industry_groups:
+  - Other Technology
+  - Computers
+  - Telecommunications
+
+description: >
+  Companies whose product is software that other people build with or work in —
+  AI infrastructure, agent platforms, developer tooling, and the layer between a
+  model and something usable. The customer is a technical team.
+
+include:
+  - AI agent and orchestration platforms sold to engineering teams
+  - developer tooling — testing, deployment, observability, code intelligence
+  - infrastructure for training, serving, or evaluating models
+  - data infrastructure, pipelines, and vector or feature stores
+  - APIs and platforms whose users are other developers
+  - security tooling where the buyer is an engineering team
+
+exclude:
+  - companies using AI internally to run an ordinary business
+  - consumer apps and chat products aimed at the general public
+  - hardware and chips where the product is a physical thing
+  - IT consultancies and staffing firms
+  - crypto trading, exchanges, and token projects
+  - anything whose only claim is the word "AI" in its description
+
+filters:
+  min_offering_amount: 100000
+  exclude_amendments: true
+  exclude_name_patterns:
+    - fund
+    - ventures
+    - spv
+    - capital partners
+    - holdings llc
