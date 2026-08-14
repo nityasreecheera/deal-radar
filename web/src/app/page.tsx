@@ -226,16 +226,12 @@ function CandidateList() {
             Deal Radar
           </h1>
 
-          <span className="flex items-baseline gap-5">
-            <Link
-              href="/analysis"
-              className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
-            >
-              Analysis →
-            </Link>
-
-            <LogoutButton />
-          </span>
+          <Link
+            href="/analysis"
+            className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+          >
+            Analysis →
+          </Link>
 
           <p className="label">
             {meta ? (
@@ -248,6 +244,8 @@ function CandidateList() {
             ) : (
               "loading"
             )}
+            <span className="mx-2 text-[var(--color-rule)]">/</span>
+            <LogoutButton />
           </p>
         </div>
       </header>
