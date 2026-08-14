@@ -1049,9 +1049,15 @@ def save_contact_email(
 # like a lie.
 MIN_FOR_A_BENCHMARK = 8
 
-# Categories that describe something other than the market being tracked. A
-# median that includes animation studios is not a healthcare benchmark.
-NON_MARKET_CATEGORIES = ("not healthcare", "unclear")
+# Categories that place a company outside the market being measured, or fail to
+# place it at all. A median including things nobody could identify is not a
+# benchmark for anything.
+#
+# "not healthcare" is a label the healthcare thesis produces; "other" is what the
+# general vocabulary produces for the same situation. Both mean "this filing is
+# not what we were looking for", which is exactly what a market benchmark has to
+# leave out — whichever domain is being read.
+NON_MARKET_CATEGORIES = ("not healthcare", "other", "unclear")
 
 
 class DealSizes(BaseModel):
@@ -1098,6 +1104,11 @@ class MarketView(BaseModel):
     """The market as seen from the filings, rather than the radar's own health."""
 
     companies: int = 0
+
+    # Filings left out because nobody could say what the company does, or it
+    # turned out to be a different kind of business. Reported rather than
+    # silently dropped: "based on 5 of 21" is a fact a reader deserves.
+    excluded: int = 0
     deal_sizes: DealSizes = Field(default_factory=DealSizes)
     by_category: dict[str, DealSizes] = Field(default_factory=dict)
     company_age: dict[str, int] = Field(default_factory=dict)
@@ -1133,8 +1144,21 @@ def market_view(
         parameters,
     ).fetchall()
 
+    # How many were set aside, so the page can say what it is based on.
+    counted = ["category IS NOT NULL"]
+    counted_parameters: list[object] = []
+
+    if theme:
+        counted.append("theme = ?")
+        counted_parameters.append(theme)
+
+    everything = connection.execute(
+        "SELECT COUNT(*) AS n FROM candidate WHERE " + " AND ".join(counted),
+        counted_parameters,
+    ).fetchone()["n"]
+
     if not rows:
-        return MarketView()
+        return MarketView(excluded=everything)
 
     year = this_year or int(max(r["filed_date"] for r in rows)[:4])
 
@@ -1168,6 +1192,7 @@ def market_view(
 
     return MarketView(
         companies=len(rows),
+        excluded=everything - len(rows),
         deal_sizes=summarise_amounts(every_amount),
         by_category={
             category: summarise_amounts(amounts)

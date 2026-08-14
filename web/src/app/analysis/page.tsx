@@ -96,7 +96,7 @@ export default function AnalysisPage() {
 
   // Typed rather than `?? {}`: an empty object literal widens to `{}` and
   // every field below it becomes an error.
-  const market: Market = data.market ?? { companies: 0 };
+  const market: Market = data.market ?? { companies: 0, excluded: 0 };
   const sizes: DealSizes = market.deal_sizes ?? { count: 0 };
   const ages = market.company_age ?? {};
   const ageBuckets = data.round_age ?? {};
@@ -155,15 +155,28 @@ export default function AnalysisPage() {
           </h2>
           <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
             Based on the{" "}
-            <span className="tabular">{market.companies}</span> companies that
-            actually turned out to be healthcare. The rest were things like
-            animation software and banking apps — the search picks those up, and
-            counting them here would throw the numbers off.
+            <span className="tabular">{market.companies}</span> companies we
+            could actually identify
+            {domain ? ` in ${domain}` : ""}.
+            {(market.excluded ?? 0) > 0 && (
+              <>
+                {" "}
+                Another <span className="tabular">{market.excluded}</span> are
+                left out — either nobody could tell what they do, or they turned
+                out to be a different kind of business that the search picked up
+                along the way. Counting those would throw the numbers off.
+              </>
+            )}
           </p>
 
           {sizes.median == null ? (
-            <p className="text-sm text-[var(--color-ink-faint)]">
-              Not enough disclosed raises yet to say.
+            <p className="max-w-2xl text-sm text-[var(--color-ink-faint)]">
+              Not enough companies yet to give a useful figure
+              {domain ? ` for ${domain}` : ""}. It takes at least eight that
+              disclosed what they were raising, and there{" "}
+              {sizes.count === 1 ? "is" : "are"}{" "}
+              <span className="tabular">{sizes.count ?? 0}</span> so far.
+              {domain && " Try All domains, or give this one a few weeks."}
             </p>
           ) : (
             <>

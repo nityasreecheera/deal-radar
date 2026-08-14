@@ -396,6 +396,7 @@ class Market(BaseModel):
     """What the filings say about the market, rather than about the radar."""
 
     companies: int = 0
+    excluded: int = 0
     deal_sizes: DealSizesRow = Field(default_factory=DealSizesRow)
     by_category: dict[str, DealSizesRow] = Field(default_factory=dict)
     company_age: dict[str, int] = Field(default_factory=dict)
@@ -496,6 +497,7 @@ def get_analysis(theme: str | None = None) -> Analysis:
             judged=judged,
             market=Market(
                 companies=seen.companies,
+                excluded=seen.excluded,
                 deal_sizes=DealSizesRow(**seen.deal_sizes.model_dump()),
                 by_category={
                     name: DealSizesRow(**sizes.model_dump())
