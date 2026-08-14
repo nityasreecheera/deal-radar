@@ -87,9 +87,10 @@ export default function AnalysisPage() {
           </h1>
 
           <p className="mt-2 text-[0.8125rem] text-[var(--color-ink-faint)]">
-            <span className="tabular">{data.judged}</span> companies judged.
-            Everything here describes what the filter decided, not what you did
-            — until you start overruling it.
+            <span className="tabular">{data.judged}</span> companies looked at
+            so far. Every number on this page comes from decisions the filter
+            made, not decisions you made — you haven&apos;t changed any of its
+            verdicts yet.
           </p>
         </div>
       </header>
@@ -98,14 +99,14 @@ export default function AnalysisPage() {
         {/* The market, not the machine. What an analyst came here for. */}
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">
-            What a raise looks like here
+            How much money are these companies raising?
           </h2>
           <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Across{" "}
-            <span className="tabular">{market.companies}</span> healthcare
-            companies on record. Companies that turned out not to be healthcare
-            are left out — a median that includes an animation studio is not a
-            benchmark for this market.
+            Based on the{" "}
+            <span className="tabular">{market.companies}</span> companies that
+            actually turned out to be healthcare. The rest were things like
+            animation software and banking apps — the search picks those up, and
+            counting them here would throw the numbers off.
           </p>
 
           {sizes.median == null ? (
@@ -115,31 +116,47 @@ export default function AnalysisPage() {
           ) : (
             <>
               <div className="flex flex-wrap gap-x-12 gap-y-4">
-                <Figure label="Typical raise" value={money(sizes.median)} />
                 <Figure
-                  label="Middle half"
-                  value={`${money(sizes.lower_quartile)} – ${money(sizes.upper_quartile)}`}
+                  label="Typical raise"
+                  value={money(sizes.median)}
+                  note="half raise more, half raise less"
                 />
                 <Figure
-                  label="Full range"
+                  label="Most land between"
+                  value={`${money(sizes.lower_quartile)} – ${money(sizes.upper_quartile)}`}
+                  note="the middle half of all companies"
+                />
+                <Figure
+                  label="Smallest and largest"
                   value={`${money(sizes.smallest)} – ${money(sizes.largest)}`}
+                  note="the two extremes"
                 />
               </div>
 
               <p className="mt-3 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-                Half of everything raised in this space sits between{" "}
-                {money(sizes.lower_quartile)} and {money(sizes.upper_quartile)}.
-                A company asking for far more or far less than that is doing
-                something worth asking about.
+                <strong className="font-normal text-[var(--color-ink)]">
+                  What to do with this:
+                </strong>{" "}
+                if a company turns up raising {money(sizes.median)}, that is
+                completely normal here. One raising far more or far less than{" "}
+                {money(sizes.lower_quartile)} to {money(sizes.upper_quartile)} is
+                unusual, and worth asking why.
               </p>
             </>
           )}
 
           {byCategory.length > 0 && (
             <div className="mt-6">
-              <h3 className="label mb-2">By what they do</h3>
+              <h3 className="label mb-2">
+                The same thing, split by type of company
+              </h3>
               <Table
-                head={["category", "companies", "typical", "middle half"]}
+                head={[
+                  "type of company",
+                  "how many",
+                  "typical raise",
+                  "most land between",
+                ]}
                 rows={byCategory.map(([name, row]) => [
                   name,
                   String(row.count),
@@ -148,8 +165,8 @@ export default function AnalysisPage() {
                 ])}
               />
               <p className="mt-2 text-[0.8125rem] text-[var(--color-ink-faint)]">
-                Only categories with at least eight disclosed raises. Below that
-                a median is a coincidence.
+                Only shown for types with at least eight companies. With fewer
+                than that, an average is just a coincidence.
               </p>
             </div>
           )}
@@ -157,18 +174,25 @@ export default function AnalysisPage() {
 
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">
-            How young the companies are
+            How old are these companies?
           </h2>
           <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Years between incorporation and the filing. Stage, without anyone
-            having to self-report it.
+            The gap between when the company was legally created and when it
+            filed to raise money. A rough guide to how early you are catching
+            them.
           </p>
 
           <Bars data={ages} />
         </section>
 
         <section>
-          <h2 className="font-display mb-1 text-[1.125rem]">Where they are</h2>
+          <h2 className="font-display mb-1 text-[1.125rem]">
+            Which states are they in?
+          </h2>
+
+          <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+            The state on the filing, which is usually where the company is based.
+          </p>
 
           <Bars
             data={Object.fromEntries(
@@ -182,12 +206,14 @@ export default function AnalysisPage() {
 
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">
-            How old rounds are when they reach you
+            How far along was the raise before you heard about it?
           </h2>
           <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Measured from the first sale to the filing date. A round already
-            running for months is not one you are early to, and it arrives
-            looking exactly like one that opened last week.
+            Companies have to tell the SEC when they first took money.
+            Comparing that to the day they filed shows how long the raise had
+            already been running. Under two weeks means you are seeing it early.
+            Over a year usually means it is finished and there is nothing left to
+            join.
           </p>
 
           <Bars data={ageBuckets} />
@@ -196,24 +222,30 @@ export default function AnalysisPage() {
         <hr className="border-[var(--color-rule)]" />
 
         <div>
-          <h2 className="font-display text-[1.125rem]">Tuning the radar</h2>
+          <h2 className="font-display text-[1.125rem]">
+            About the tool, not the companies
+          </h2>
           <p className="mt-1 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Below here is about the tool rather than the market — what it is
-            searching, what it keeps throwing away, and where you disagreed with
-            it. Useful when deciding what to change in the thesis file.
+            Everything above is about the companies. Everything below is about
+            how the radar itself is doing — where it looks, what it keeps
+            rejecting, and where you disagreed with it. Read this when you want
+            to change what it searches for.
           </p>
         </div>
 
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">
-            Where companies come from
+            Where the radar looks
           </h2>
           <p className="mb-6 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            When a company files, it ticks one industry box. These are the boxes
-            the radar searches, and underneath each one is what those companies
-            actually turned out to be. This is the only thing known before a
-            company costs anything to look up, so it is the only place a change
-            saves money.
+            Every company ticks one industry box when it files. These are the
+            boxes the radar searches. Underneath each one is what those companies
+            turned out to be once we looked them up.
+            <br />
+            <br />
+            This matters because the box is the only thing we know{" "}
+            <em>before</em> spending money looking a company up. So it is the
+            only place where a change actually saves anything.
           </p>
 
           <div className="space-y-7">
@@ -297,29 +329,30 @@ export default function AnalysisPage() {
           </div>
 
           <p className="mt-6 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Boxes with nothing worth showing account for{" "}
+            Boxes that have never produced a single useful company account for{" "}
             <span className="tabular">
               {sources
                 .filter((source) => source.fitted === 0)
                 .reduce((sum, source) => sum + source.seen, 0)}
             </span>{" "}
-            companies fetched, looked up and judged. Those are the lines you
-            could delete from the thesis file.
+            companies downloaded, looked up and judged for nothing. Those are
+            the boxes worth switching off.
           </p>
         </section>
 
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">
-            What they turn out to be
+            What kinds of company the radar finds
           </h2>
           <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Known only after each company was looked up. Useful for reading the
-            thesis back to yourself: the categories with a high hit rate are what
-            it is actually selecting for.
+            Every company sorted by what it actually does. &quot;Fit&quot;
+            means the filter thought it was worth putting in front of you. This
+            is your own criteria described back to you — whatever has the most
+            fits is what the radar is really hunting for.
           </p>
 
           <Table
-            head={["category", "seen", "fit", "passed"]}
+            head={["type of company", "how many", "fit", "rejected"]}
             rows={categories.map((row) => [
               row.category,
               String(row.seen),
@@ -338,18 +371,18 @@ export default function AnalysisPage() {
 
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">
-            Where you overruled the filter
+            Companies where you disagreed with the filter
           </h2>
           <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            The honest measure of whether the thesis is right. A long list means
-            the criteria do not say what you mean, which is a config problem
-            rather than a model one.
+            When you change a verdict yourself, it shows up here. This is the
+            real test of whether the radar&apos;s criteria match what you
+            actually want — a long list means the criteria need rewriting.
           </p>
 
           {overrides.length === 0 ? (
             <p className="text-sm text-[var(--color-ink-faint)]">
-              Nothing yet — every verdict on record is the filter&apos;s. Open a
-              company and use <em>Your call</em> to disagree with one.
+              Nothing here yet. Every verdict so far is the filter&apos;s own.
+              Open any company and use <em>Your call</em> to change one.
             </p>
           ) : (
             <ul className="space-y-2">
@@ -393,13 +426,26 @@ function money(amount: number | null | undefined): string {
   return `$${Math.round(amount / 1000)}k`;
 }
 
-function Figure({ label, value }: { label: string; value: string }) {
+function Figure({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+}) {
   return (
     <div>
       <p className="label mb-1">{label}</p>
       <p className="font-display tabular text-[1.375rem] leading-none">
         {value}
       </p>
+      {note && (
+        <p className="mt-1 text-[0.75rem] text-[var(--color-ink-faint)]">
+          {note}
+        </p>
+      )}
     </div>
   );
 }
