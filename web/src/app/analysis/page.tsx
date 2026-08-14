@@ -3,23 +3,22 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import {
-  VERDICT_LABEL,
-  effectiveVerdict,
-  type Analysis,
-  type DealSizes,
-  type Market,
-} from "@/lib/api";
+import { type Analysis, type DealSizes, type Market } from "@/lib/api";
 
 /**
- * The whole collection at once, rather than one company at a time.
+ * The market, as the filings describe it.
  *
- * The list answers "what arrived today". This answers "what am I actually
- * seeing, and is the thesis right" — a question nobody can answer by reading
- * companies one a week, weeks apart.
+ * Answers what nobody can work out by reading companies one a week, weeks
+ * apart: what a normal raise looks like here, how early these companies are,
+ * and how much of the round is usually gone by the time it surfaces.
  *
- * Deliberately tables and bars rather than charts. Every number here is a count
- * an analyst will want to read exactly, and a count read exactly is a table.
+ * Strictly about the companies. The radar's own health — which SEC boxes earn
+ * their keep, what the filter keeps rejecting — used to live at the bottom of
+ * this page and does not any more. It is still on /api/analysis for whoever is
+ * tuning the thing, but it was answering a question an analyst never asks.
+ *
+ * Deliberately tables and bars rather than charts. Every number here is one
+ * someone will want to read exactly, and a number read exactly is a table.
  */
 export default function AnalysisPage() {
   const [data, setData] = useState<Analysis | null>(null);
@@ -61,9 +60,6 @@ export default function AnalysisPage() {
     );
   }
 
-  const categories = data.categories ?? [];
-  const sources = data.sources ?? [];
-  const overrides = data.overrides ?? [];
   // Typed rather than `?? {}`: an empty object literal widens to `{}` and
   // every field below it becomes an error.
   const market: Market = data.market ?? { companies: 0 };
@@ -219,197 +215,6 @@ export default function AnalysisPage() {
           <Bars data={ageBuckets} />
         </section>
 
-        <hr className="border-[var(--color-rule)]" />
-
-        <div>
-          <h2 className="font-display text-[1.125rem]">
-            About the tool, not the companies
-          </h2>
-          <p className="mt-1 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Everything above is about the companies. Everything below is about
-            how the radar itself is doing — where it looks, what it keeps
-            rejecting, and where you disagreed with it. Read this when you want
-            to change what it searches for.
-          </p>
-        </div>
-
-        <section>
-          <h2 className="font-display mb-1 text-[1.125rem]">
-            Where the radar looks
-          </h2>
-          <p className="mb-6 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Every company ticks one industry box when it files. These are the
-            boxes the radar searches. Underneath each one is what those companies
-            turned out to be once we looked them up.
-            <br />
-            <br />
-            This matters because the box is the only thing we know{" "}
-            <em>before</em> spending money looking a company up. So it is the
-            only place where a change actually saves anything.
-          </p>
-
-          <div className="space-y-7">
-            {sources.map((source) => {
-              const slices = source.breakdown ?? [];
-              const worthless = source.fitted === 0;
-
-              return (
-                <div key={source.industry_group}>
-                  <div className="flex items-baseline justify-between gap-4 border-b border-[var(--color-rule)] pb-1">
-                    <h3
-                      className={`font-display text-[1rem] ${
-                        worthless ? "text-[var(--color-ink-faint)]" : ""
-                      }`}
-                    >
-                      {source.industry_group}
-                    </h3>
-
-                    <p className="text-[0.8125rem] text-[var(--color-ink-faint)]">
-                      <span className="tabular">{source.seen}</span> companies
-                      {source.fitted > 0 ? (
-                        <>
-                          {" · "}
-                          <span className="tabular text-[var(--color-fits)]">
-                            {source.fitted}
-                          </span>{" "}
-                          worth showing
-                        </>
-                      ) : (
-                        <span> · nothing worth showing</span>
-                      )}
-                    </p>
-                  </div>
-
-                  {slices.length === 0 ? (
-                    <p className="pt-2 text-sm text-[var(--color-ink-faint)]">
-                      Searched, but nothing has ever been filed under it.
-                    </p>
-                  ) : (
-                    <ul className="pt-2">
-                      {slices.map((slice) => (
-                        <li
-                          key={slice.category}
-                          className="flex items-center gap-3 py-[3px] text-sm"
-                        >
-                          <span className="w-52 shrink-0 text-[var(--color-ink-soft)]">
-                            {slice.category}
-                          </span>
-
-                          <span
-                            className={`h-[9px] ${
-                              slice.fitted
-                                ? "bg-[var(--color-fits)]"
-                                : "bg-[var(--color-rule)]"
-                            }`}
-                            style={{
-                              width: `${
-                                source.seen
-                                  ? Math.max((260 * slice.seen) / source.seen, 3)
-                                  : 0
-                              }px`,
-                            }}
-                          />
-
-                          <span className="tabular text-[var(--color-ink-faint)]">
-                            {slice.seen}
-                            {slice.fitted > 0 && (
-                              <span className="text-[var(--color-fits)]">
-                                {"  "}
-                                {slice.fitted} fit
-                              </span>
-                            )}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <p className="mt-6 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Boxes that have never produced a single useful company account for{" "}
-            <span className="tabular">
-              {sources
-                .filter((source) => source.fitted === 0)
-                .reduce((sum, source) => sum + source.seen, 0)}
-            </span>{" "}
-            companies downloaded, looked up and judged for nothing. Those are
-            the boxes worth switching off.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="font-display mb-1 text-[1.125rem]">
-            What kinds of company the radar finds
-          </h2>
-          <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Every company sorted by what it actually does. &quot;Fit&quot;
-            means the filter thought it was worth putting in front of you. This
-            is your own criteria described back to you — whatever has the most
-            fits is what the radar is really hunting for.
-          </p>
-
-          <Table
-            head={["type of company", "how many", "fit", "rejected"]}
-            rows={categories.map((row) => [
-              row.category,
-              String(row.seen),
-              row.fitted ? String(row.fitted) : "—",
-              row.rejected ? String(row.rejected) : "—",
-            ])}
-            dim={categories.map((row) => row.fitted === 0)}
-          />
-
-          {data.clusters && (
-            <p className="mt-4 max-w-2xl border-l-2 border-[var(--color-rule)] pl-4 text-sm text-[var(--color-ink-soft)]">
-              {data.clusters}
-            </p>
-          )}
-        </section>
-
-        <section>
-          <h2 className="font-display mb-1 text-[1.125rem]">
-            Companies where you disagreed with the filter
-          </h2>
-          <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-            When you change a verdict yourself, it shows up here. This is the
-            real test of whether the radar&apos;s criteria match what you
-            actually want — a long list means the criteria need rewriting.
-          </p>
-
-          {overrides.length === 0 ? (
-            <p className="text-sm text-[var(--color-ink-faint)]">
-              Nothing here yet. Every verdict so far is the filter&apos;s own.
-              Open any company and use <em>Your call</em> to change one.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {overrides.map((candidate) => (
-                <li key={candidate.accession} className="text-sm">
-                  <Link
-                    href={`/company/${encodeURIComponent(candidate.accession)}`}
-                    className="font-display text-[0.9375rem] hover:underline"
-                  >
-                    {candidate.company_name}
-                  </Link>
-                  <span className="text-[var(--color-ink-faint)]">
-                    {" — filter said "}
-                    {VERDICT_LABEL[candidate.verdict]}
-                    {", you said "}
-                    {VERDICT_LABEL[effectiveVerdict(candidate)]}
-                  </span>
-                  {candidate.user_note && (
-                    <span className="block text-[var(--color-ink-soft)]">
-                      “{candidate.user_note}”
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       </main>
     </div>
   );
