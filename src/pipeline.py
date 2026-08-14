@@ -18,7 +18,7 @@ from src.funding import fetch_history, save_history
 from src.enrich import Enrichment, enrich_filing
 from src.judge import JudgementError, judge_filing
 from src.models import Candidate
-from src.seen import filter_unseen, mark_seen
+from src.seen import filter_unseen, mark_seen, mark_seen_for_theme
 from src.thesis import Thesis, apply_filters
 
 
@@ -122,7 +122,10 @@ def run_radar(
     filings, problems = found.filings, list(found.problems)
 
     kept, dropped = apply_filters(filings, thesis)
-    fresh, already_seen = filter_unseen(connection, kept)
+    # Novelty is per domain. A company the healthcare radar rejected is still
+    # new to a technology radar, and treating it as old starves every domain
+    # after the first.
+    fresh, already_seen = filter_unseen(connection, kept, theme=thesis.domain)
 
     if limit is not None:
         fresh = fresh[:limit]
@@ -131,7 +134,10 @@ def run_radar(
 
     for filing in fresh:
         try:
-            enrichment = enrich(filing)
+            # A company another domain already looked up does not need looking
+            # up again. Without this, every extra domain re-runs a web search
+            # per company and a second one alone would exhaust the free tier.
+            enrichment = recall_enrichment(connection, filing) or enrich(filing)
         except Exception as exc:  # noqa: BLE001 - one bad lookup must not stop the run
             problems.append(f"{filing.company_name}: enrichment failed ({exc})")
             enrichment = Enrichment()
@@ -156,6 +162,8 @@ def run_radar(
                 website=candidate.website,
                 accession=filing.accession,
             )
+
+            mark_seen_for_theme(connection, filing.company_name, thesis.domain)
 
             # And the judgement itself is kept, not just the fact of having
             # looked. Rendering a digest used to be the only place a verdict
@@ -191,3 +199,30 @@ def run_radar(
         unsearched=list(found.unsearched),
         searched_count=len(found.searched),
     )
+
+
+def recall_enrichment(
+    connection: sqlite3.Connection,
+    filing,
+) -> Enrichment | None:
+    """
+    What another domain already found out about this company.
+
+    The judgement table keeps the website and description that enrichment
+    produced, so a company examined for one thesis can be judged against another
+    without paying for the lookup twice. The verdict is not reused — only the
+    evidence — because fit is a question each thesis answers for itself.
+    """
+    row = connection.execute(
+        """
+        SELECT website, description FROM candidate
+        WHERE canonical_name = ? AND description IS NOT NULL AND description != ''
+        ORDER BY judged_at DESC LIMIT 1
+        """,
+        (filing.canonical_name,),
+    ).fetchone()
+
+    if row is None:
+        return None
+
+    return Enrichment(website=row["website"], description=row["description"])

@@ -421,6 +421,29 @@ of styling goes through it.
 properties. A `@property` isn't serialised and would never reach the browser, which
 has already cost time twice on this project.
 
+### More than one domain
+
+One thesis file per domain in `config/`. Two things make that work, and both were
+broken until a second domain existed to expose them.
+
+**Novelty is per domain.** `seen_company` is global and answers "have we ever
+encountered this company", which is what "companies known" counts. The pipeline
+needs a different question — has *this domain* been offered it — and that lives in
+`seen_for_theme`. Keyed globally, whichever thesis ran first claimed a company
+forever: the healthcare radar had already claimed 136 technology filings it
+rejected, which are exactly what a technology thesis is looking for. Every domain
+added after the first was starved, silently, and looked like it was working.
+
+`backfill_theme_sightings()` reconstructs the per-domain index from the
+judgements, because every judgement proves that domain was shown that company.
+Without it, adding the table would replay months of companies into an inbox.
+
+**Enrichment is reused across domains.** `recall_enrichment()` reads the website
+and description a previous judgement already stored. Enrichment is the expensive
+step — a web search per company against a free tier of about 500 a month — and
+without reuse a second domain alone exhausts the quota. The *verdict* is never
+reused, only the evidence: fit is a question each thesis answers for itself.
+
 ### Changing the schema
 
 The database updates itself every time you connect. `CREATE TABLE IF NOT EXISTS` does

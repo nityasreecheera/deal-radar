@@ -10,7 +10,7 @@ from src.judge import JudgementError
 from src.edgar import SearchOutcome
 from src.models import Candidate, FormDFiling
 from src.pipeline import default_window, run_radar
-from src.seen import connect, count_seen, mark_seen
+from src.seen import connect, count_seen, mark_seen, mark_seen_for_theme
 from src.thesis import Thesis
 
 
@@ -65,7 +65,16 @@ def fetcher(
 
 def verdict_judge(verdict: str = "fits", reason: str = "Clinical software."):
     def judge(f: FormDFiling, e: Enrichment, t: Thesis) -> Candidate:
-        return Candidate(filing=f, verdict=verdict, reason=reason)
+        # Carries the enrichment onto the candidate, which is what the real
+        # judge does. Without it the fixture quietly stored nothing, and a test
+        # for reusing a stored lookup could never pass.
+        return Candidate(
+            filing=f,
+            verdict=verdict,
+            reason=reason,
+            website=e.website,
+            description=e.description,
+        )
 
     return judge
 
@@ -117,7 +126,10 @@ def test_filtered_filings_are_reported_with_reasons(db) -> None:
 
 
 def test_a_known_company_is_not_surfaced_again(db) -> None:
+    # Marked for this domain specifically. Novelty is per domain now: a company
+    # another thesis looked at is still new to this one.
     mark_seen(db, "Acme Health, Inc.", source="form_d")
+    mark_seen_for_theme(db, "Acme Health, Inc.", "Healthcare")
 
     run = run_radar(
         db,
@@ -328,6 +340,7 @@ def test_limit_caps_how_many_are_judged(db) -> None:
 
 def test_skipped_count_combines_both_kinds_of_skip(db) -> None:
     mark_seen(db, "Known Co", source="form_d")
+    mark_seen_for_theme(db, "Known Co", "Healthcare")
 
     run = run_radar(
         db,
@@ -363,3 +376,98 @@ def test_fetch_problems_are_carried_through(db) -> None:
     )
 
     assert run.problems == ["search 'Biotechnology': timeout"]
+
+
+def test_another_domain_having_seen_a_company_does_not_hide_it(db) -> None:
+    """
+    The bug this exists for.
+
+    The seen-index was keyed on the company alone, so whichever thesis ran
+    first claimed a company forever. In practice the healthcare radar had
+    already claimed 136 technology filings it rejected — exactly the companies
+    a technology thesis is looking for — and every domain added after the first
+    was quietly starved.
+    """
+    mark_seen(db, "Acme Health, Inc.", source="form_d")
+    mark_seen_for_theme(db, "Acme Health, Inc.", "Healthcare")
+
+    ai_tools = thesis()
+    ai_tools.domain = "AI tools"
+
+    run = run_radar(
+        db,
+        ai_tools,
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+    )
+
+    # New to this domain, even though another one has already judged it.
+    assert len(run.candidates) == 1
+    assert run.already_seen == 0
+
+
+def test_a_domain_does_not_see_the_same_company_twice(db) -> None:
+    ai_tools = thesis()
+    ai_tools.domain = "AI tools"
+
+    for _ in range(2):
+        run = run_radar(
+            db,
+            ai_tools,
+            "2026-07-26",
+            "2026-07-29",
+            fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+            enrich=no_enrichment,
+            judge=verdict_judge(),
+        )
+
+    # The second run finds nothing new: this domain has been offered it.
+    assert run.candidates == []
+    assert run.already_seen == 1
+
+
+def test_a_lookup_another_domain_paid_for_is_reused(db) -> None:
+    """
+    Enrichment is the expensive step: a web search per company, on a free tier
+    of about 500 a month. Without reuse, every extra domain re-runs it over the
+    same companies and a second domain alone exhausts the quota.
+    """
+    lookups = 0
+
+    def counting_enrich(f):
+        nonlocal lookups
+        lookups += 1
+        return Enrichment(website="https://acme.com", description="Clinical software.")
+
+    healthcare = thesis()
+
+    run_radar(
+        db,
+        healthcare,
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=counting_enrich,
+        judge=verdict_judge(),
+    )
+
+    ai_tools = thesis()
+    ai_tools.domain = "AI tools"
+
+    run = run_radar(
+        db,
+        ai_tools,
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=counting_enrich,
+        judge=verdict_judge(),
+    )
+
+    # Judged again — fit is a question each thesis answers for itself — but the
+    # evidence was recalled rather than re-fetched.
+    assert len(run.candidates) == 1
+    assert lookups == 1

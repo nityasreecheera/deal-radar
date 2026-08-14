@@ -34,6 +34,21 @@ CREATE TABLE IF NOT EXISTS seen_company (
     accession        TEXT
 );
 
+-- Which domains have already been offered a company.
+--
+-- seen_company answers "have we ever encountered this?" and is global, which is
+-- correct for a count of everything known. But the pipeline needs a narrower
+-- question: has THIS domain been shown this company? Without the distinction,
+-- whichever thesis ran first claimed every company forever, and a second domain
+-- was quietly starved — 136 technology filings the healthcare radar rejected
+-- could never reach a technology thesis.
+CREATE TABLE IF NOT EXISTS seen_for_theme (
+    canonical_name TEXT NOT NULL,
+    theme          TEXT NOT NULL,
+    first_seen     TEXT NOT NULL,
+    PRIMARY KEY (canonical_name, theme)
+);
+
 -- What we concluded, not merely that we looked.
 --
 -- The seen-index answers "have I encountered this company?" and that is all it
@@ -348,9 +363,17 @@ def count_seen(connection: sqlite3.Connection) -> int:
 def filter_unseen(
     connection: sqlite3.Connection,
     filings: list,
+    theme: str | None = None,
 ) -> tuple[list, int]:
     """
-    Split filings into those never seen before and a count of those skipped.
+    Split filings into those this domain has not been offered, and a count.
+
+    `theme` matters. Novelty is per domain: a company the healthcare radar
+    looked at and rejected is still new to a technology radar, and treating it
+    as old means a second domain only ever sees what the first did not want.
+
+    Without a theme the old global behaviour applies, which is what the
+    single-domain callers and the tests expect.
 
     Deduplicates within the batch too: the same company can file twice in one
     window, and showing it twice in one digest would be as wrong as showing it
@@ -367,7 +390,16 @@ def filter_unseen(
             skipped += 1
             continue
 
-        if is_seen(connection, filing.company_name):
+        if theme:
+            already = connection.execute(
+                "SELECT 1 FROM seen_for_theme WHERE canonical_name = ? "
+                "AND theme = ?",
+                (canonical, theme),
+            ).fetchone()
+        else:
+            already = is_seen(connection, filing.company_name)
+
+        if already:
             skipped += 1
             continue
 
@@ -380,3 +412,56 @@ def filter_unseen(
 if __name__ == "__main__":
     with closing(connect()) as db:
         print(f"{count_seen(db)} companies in the index")
+
+
+def mark_seen_for_theme(
+    connection: sqlite3.Connection,
+    company_name: str,
+    theme: str,
+    first_seen: str | None = None,
+) -> None:
+    """
+    Record that one domain has been offered this company.
+
+    Separate from mark_seen, which records that the radar has encountered a
+    company at all. The first sighting per domain is what stops it appearing in
+    that domain's digest twice.
+    """
+    canonical = normalize_company_name(company_name)
+
+    if not canonical:
+        return
+
+    connection.execute(
+        """
+        INSERT INTO seen_for_theme (canonical_name, theme, first_seen)
+        VALUES (?, ?, ?)
+        ON CONFLICT (canonical_name, theme) DO NOTHING
+        """,
+        (canonical, theme, first_seen or datetime.now(UTC).isoformat()),
+    )
+    connection.commit()
+
+
+def backfill_theme_sightings(connection: sqlite3.Connection) -> int:
+    """
+    Give each domain the memory it should already have had.
+
+    Every judgement on record proves that domain was shown that company, so the
+    per-domain index can be reconstructed from the judgements rather than
+    starting empty — which would replay months of companies into somebody's
+    inbox.
+    """
+    cursor = connection.execute(
+        """
+        INSERT INTO seen_for_theme (canonical_name, theme, first_seen)
+        SELECT canonical_name, theme, MIN(judged_at)
+        FROM candidate
+        WHERE theme IS NOT NULL AND canonical_name IS NOT NULL
+        GROUP BY canonical_name, theme
+        ON CONFLICT (canonical_name, theme) DO NOTHING
+        """
+    )
+    connection.commit()
+
+    return cursor.rowcount
