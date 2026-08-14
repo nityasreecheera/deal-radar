@@ -438,6 +438,26 @@ added after the first was starved, silently, and looked like it was working.
 judgements, because every judgement proves that domain was shown that company.
 Without it, adding the table would replay months of companies into an inbox.
 
+**A judgement is keyed on the filing AND the thesis.** `candidate` was keyed on
+`accession` alone, which was true until a second thesis existed and then silently
+stopped being true: the second domain to judge a company overwrote the first's
+verdict, reason, category and theme. 174 judgements were lost that way before
+anyone noticed, because nothing errored and each domain's own run looked correct.
+
+`rebuild_candidate_key()` re-keys on `(accession, theme)`. It runs **after** the
+column migrations, never before — the new key needs `theme`, and on an old
+database that column is added by the migration loop, so re-keying first fails on
+precisely the schema it exists to upgrade.
+
+`theme` is never written as null. SQLite treats nulls in a primary key as
+distinct, so a judgement saved without a domain would insert a new row every time
+rather than replacing the old one, and a rejudge would pile up instead of
+correcting itself.
+
+A sighting in `seen_for_theme` with no matching judgement is a hole rather than a
+memory — that domain will skip the company forever without ever having judged it.
+Worth checking after anything that touches judgements.
+
 **Enrichment is reused across domains.** `recall_enrichment()` reads the website
 and description a previous judgement already stored. Enrichment is the expensive
 step — a web search per company against a free tier of about 500 a month — and

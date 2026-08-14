@@ -99,7 +99,11 @@ def test_existing_rows_survive_the_migration(tmp_path: Path) -> None:
         assert stored.company_name == "Genomenon, Inc."
         assert stored.reason == "Judged before theme existed."
         # Rows judged before themes existed have none, and that is not an error.
-        assert stored.theme is None
+        # Filed under Healthcare rather than left null. The key is
+        # (accession, theme) now and cannot hold a null half — and a judgement
+        # made before themes existed WAS the healthcare thesis, because it was
+        # the only one. Recording that is accurate, not a fudge.
+        assert stored.theme == "Healthcare"
         assert stored.viewed_at is None
         assert stored.is_unread is True
 
@@ -140,7 +144,12 @@ def test_migration_reports_what_it_applied(tmp_path: Path) -> None:
     # addition; what matters is that it names what it did and covers these two.
     assert "candidate.theme" in applied
     assert "candidate.viewed_at" in applied
-    assert all(entry.startswith("candidate.") for entry in applied)
+    # The re-key is reported too, and is not a column. Anything that is not a
+    # column addition should be legible in the log rather than silent.
+    assert all(
+        entry.startswith("candidate.") or entry.startswith("candidate re-keyed")
+        for entry in applied
+    )
 
 
 def test_a_fresh_database_needs_no_migration(tmp_path: Path) -> None:
@@ -148,3 +157,68 @@ def test_a_fresh_database_needs_no_migration(tmp_path: Path) -> None:
         # The base schema already declares both columns.
         assert apply_migrations(connection) == []
         assert "theme" in existing_columns(connection, "candidate")
+
+
+def test_two_domains_judging_one_filing_keep_both_verdicts(tmp_path) -> None:
+    """
+    The bug this exists for.
+
+    The judgement table was keyed on the filing alone, so the second thesis to
+    look at a company overwrote the first — verdict, reason, category and the
+    domain label itself. 174 judgements were lost that way before anyone
+    noticed, because nothing errored and each domain's own run looked fine.
+    """
+    from src.candidates import get_candidate, list_candidates, save_candidate
+    from src.models import Candidate, FormDFiling
+
+    def judgement(theme: str, verdict: str, reason: str) -> Candidate:
+        return Candidate(
+            filing=FormDFiling(
+                accession="acc-shared",
+                cik="1",
+                company_name="Cornelis Networks, Inc.",
+                filed_date="2026-08-01",
+                industry_group="Other Technology",
+            ),
+            verdict=verdict,
+            reason=reason,
+        )
+
+    with closing(connect(tmp_path / "radar.sqlite")) as db:
+        save_candidate(db, judgement("AI tools", "no_fit", "Hardware."), theme="AI tools")
+        save_candidate(db, judgement("AI infra", "fits", "Interconnect."), theme="AI infra")
+
+        both = list_candidates(db)
+
+        assert len(both) == 2
+        assert {c.theme for c in both} == {"AI tools", "AI infra"}
+
+        # Each domain's own verdict survives the other.
+        assert get_candidate(db, "acc-shared", theme="AI tools").verdict == "no_fit"
+        assert get_candidate(db, "acc-shared", theme="AI infra").verdict == "fits"
+
+
+def test_rejudging_within_one_domain_still_replaces(tmp_path) -> None:
+    from src.candidates import get_candidate, list_candidates, save_candidate
+    from src.models import Candidate, FormDFiling
+
+    def judgement(verdict: str) -> Candidate:
+        return Candidate(
+            filing=FormDFiling(
+                accession="acc-1",
+                cik="1",
+                company_name="Acme",
+                filed_date="2026-08-01",
+                industry_group="Other Technology",
+            ),
+            verdict=verdict,
+            reason="Because.",
+        )
+
+    with closing(connect(tmp_path / "radar.sqlite")) as db:
+        save_candidate(db, judgement("maybe"), theme="Healthcare")
+        save_candidate(db, judgement("fits"), theme="Healthcare")
+
+        # Same filing, same domain: corrected, not duplicated.
+        assert len(list_candidates(db)) == 1
+        assert get_candidate(db, "acc-1").verdict == "fits"

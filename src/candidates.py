@@ -149,7 +149,7 @@ def save_candidate(
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?
         )
-        ON CONFLICT (accession) DO UPDATE SET
+        ON CONFLICT (accession, theme) DO UPDATE SET
             verdict         = excluded.verdict,
             reason          = excluded.reason,
             website         = COALESCE(excluded.website, candidate.website),
@@ -157,7 +157,6 @@ def save_candidate(
                 excluded.description, candidate.description
             ),
             judged_at       = excluded.judged_at,
-            theme           = COALESCE(excluded.theme, candidate.theme),
             people          = COALESCE(excluded.people, candidate.people),
             amount_sold     = COALESCE(
                 excluded.amount_sold, candidate.amount_sold
@@ -196,7 +195,11 @@ def save_candidate(
             filing.state,
             filing.year_of_incorporation,
             timestamp,
-            theme,
+            # Never null. SQLite treats nulls in a primary key as distinct, so a
+            # judgement saved without a domain would insert a new row every time
+            # instead of replacing the old one — a rejudge would pile up rather
+            # than correct itself.
+            theme or "",
             json.dumps([p.model_dump(mode="json") for p in filing.related_persons]),
             filing.total_amount_sold,
             filing.investor_count,
@@ -226,12 +229,27 @@ def save_candidate(
 def get_candidate(
     connection: sqlite3.Connection,
     accession: str,
+    theme: str | None = None,
 ) -> StoredCandidate | None:
-    """Fetch one judgement by filing."""
-    row = connection.execute(
-        "SELECT * FROM candidate WHERE accession = ?",
-        (accession,),
-    ).fetchone()
+    """
+    Fetch one judgement by filing, and optionally by the domain that made it.
+
+    One filing can now carry several judgements, because each thesis answers
+    "does this fit" for itself and a company can be a fit for one domain and
+    firmly not for another. Without a domain the most recent is returned, which
+    is what a page showing a company in general wants.
+    """
+    if theme:
+        row = connection.execute(
+            "SELECT * FROM candidate WHERE accession = ? AND theme = ?",
+            (accession, theme),
+        ).fetchone()
+    else:
+        row = connection.execute(
+            "SELECT * FROM candidate WHERE accession = ? "
+            "ORDER BY judged_at DESC LIMIT 1",
+            (accession,),
+        ).fetchone()
 
     return StoredCandidate(**dict(row)) if row is not None else None
 

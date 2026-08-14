@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS seen_for_theme (
 -- Keyed on accession rather than company, because a company can file more than
 -- once and each filing is a separate judgement made on separate evidence.
 CREATE TABLE IF NOT EXISTS candidate (
-    accession        TEXT PRIMARY KEY,
+    accession        TEXT NOT NULL,
     canonical_name   TEXT NOT NULL,
     company_name     TEXT NOT NULL,
     verdict          TEXT NOT NULL,
@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS candidate (
     -- One line on what the company does. Distinct from `reason`, which explains
     -- the verdict; a detail view needs the business, not the decision.
     summary          TEXT
+,
+
+    -- A judgement is a filing AND the thesis that judged it. Keyed on the
+    -- filing alone, the second domain to look at a company overwrote the
+    -- first's verdict, reason and theme — 174 judgements were lost that way
+    -- before anyone noticed, because nothing errored.
+    PRIMARY KEY (accession, theme)
 );
 
 -- People named on filings, one row each.
@@ -231,6 +238,60 @@ def existing_columns(connection: sqlite3.Connection, table: str) -> set[str]:
     return {row["name"] for row in rows}
 
 
+def rebuild_candidate_key(connection: sqlite3.Connection) -> bool:
+    """
+    Re-key the judgement table on (accession, theme).
+
+    SQLite cannot alter a primary key, so the table is rebuilt. Returns whether
+    anything was done.
+
+    This is the migration that could not be expressed as "add a column": the
+    original key said a filing has one judgement, which was true until a second
+    thesis existed and then silently stopped being true.
+    """
+    columns = existing_columns(connection, "candidate")
+
+    if not columns:
+        return False
+
+    keys = connection.execute("PRAGMA table_info(candidate)").fetchall()
+    primary = [row["name"] for row in keys if row["pk"]]
+
+    if primary == ["accession", "theme"]:
+        return False
+
+    names = ", ".join(columns)
+
+    # Build the new table from the live schema, then copy. A row with no theme
+    # would break the key, so those are filed under the original domain.
+    create = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='candidate'"
+    ).fetchone()["sql"]
+
+    rebuilt = (
+        create.replace("CREATE TABLE candidate", "CREATE TABLE candidate_new", 1)
+        .replace("accession        TEXT PRIMARY KEY", "accession        TEXT NOT NULL")
+        .replace("accession       TEXT PRIMARY KEY", "accession       TEXT NOT NULL")
+    )
+
+    if "PRIMARY KEY (accession, theme)" not in rebuilt:
+        rebuilt = rebuilt.rstrip().rstrip(")") + ",\n    PRIMARY KEY (accession, theme)\n)"
+
+    connection.executescript(
+        f"""
+        {rebuilt};
+        INSERT INTO candidate_new ({names})
+            SELECT {names.replace('theme', "COALESCE(theme, 'Healthcare')")}
+            FROM candidate;
+        DROP TABLE candidate;
+        ALTER TABLE candidate_new RENAME TO candidate;
+        """
+    )
+    connection.commit()
+
+    return True
+
+
 def apply_migrations(connection: sqlite3.Connection) -> list[str]:
     """
     Add any columns missing from an existing database.
@@ -248,6 +309,13 @@ def apply_migrations(connection: sqlite3.Connection) -> list[str]:
 
         connection.execute(statement)
         applied.append(f"{table}.{column}")
+
+    # After the columns, never before: the new key needs `theme`, and on an old
+    # database that column was only just added by the loop above. Re-keying
+    # first fails on precisely the schema this exists to upgrade.
+    if rebuild_candidate_key(connection):
+        applied.append("candidate re-keyed on (accession, theme)")
+
 
     if applied:
         connection.commit()
