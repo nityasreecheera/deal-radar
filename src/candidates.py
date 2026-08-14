@@ -553,6 +553,11 @@ class CategoryContext(BaseModel):
     fitted: int = 0
     since: str = ""
 
+    # How many of these arrived in the same digest. Without it, three companies
+    # of one kind landing together each get told they are "the 3rd", which is
+    # true of none of them and reads as a bug — because it is one.
+    arriving_now: int = 1
+
     @property
     def is_worth_saying(self) -> bool:
         """
@@ -568,6 +573,25 @@ class CategoryContext(BaseModel):
         """One line for a human."""
         if not self.is_worth_saying:
             return ""
+
+        # Several of a kind at once is a different observation from the Nth one
+        # arriving alone, and a more interesting one.
+        if self.arriving_now > 1:
+            sentence = (
+                f"{self.arriving_now} {self.category} companies in this digest"
+            )
+
+            earlier = self.seen - self.arriving_now
+
+            if earlier > 0:
+                sentence += f", making {self.seen}"
+
+                if self.since:
+                    sentence += f" since {self.since}"
+            else:
+                sentence += " — the first of these you've seen"
+
+            return sentence + "."
 
         ordinal = f"{self.seen}{ordinal_suffix(self.seen)}"
         sentence = f"The {ordinal} {self.category} company you've seen"
@@ -702,6 +726,7 @@ def describe_category(
     candidate: Candidate,
     since: str | None = None,
     theme: str | None = None,
+    arriving_now: int = 1,
 ) -> str:
     """
     One line on how a company sits against the ones like it, or nothing.
@@ -710,12 +735,53 @@ def describe_category(
     is correct: a category with two members has nothing to say, and a line
     saying so would be noise in a digest that only works while it stays short.
     """
-    return category_context(
+    context = category_context(
         connection,
         getattr(candidate, "category", None),
         since=since,
         theme=theme,
-    ).describe()
+    )
+    context.arriving_now = arriving_now
+
+    return context.describe()
+
+
+def category_lines(
+    connection: sqlite3.Connection,
+    candidates: list[Candidate],
+    since: str | None = None,
+    theme: str | None = None,
+) -> dict[str, str]:
+    """
+    A category line per company, said once per category.
+
+    Repeating the same sentence under every company that shares a category
+    fills a two-minute email with one observation restated. It goes to the
+    first of them, and mentions how many arrived together.
+    """
+    grouped: dict[str, list[Candidate]] = {}
+
+    for candidate in candidates:
+        category = getattr(candidate, "category", None)
+
+        if category:
+            grouped.setdefault(category, []).append(candidate)
+
+    lines: dict[str, str] = {}
+
+    for members in grouped.values():
+        line = describe_category(
+            connection,
+            members[0],
+            since=since,
+            theme=theme,
+            arriving_now=len(members),
+        )
+
+        if line:
+            lines[members[0].filing.accession] = line
+
+    return lines
 
 
 # Four is as many as a footer can carry before it stops being a footer. The

@@ -15,7 +15,7 @@ from src.candidates import (
 )
 from src.delivery import deliver
 from src.candidates import (
-    describe_category,
+    category_lines,
     describe_rejection_clusters,
     quarter_start,
 )
@@ -65,18 +65,15 @@ def command_run(args: argparse.Namespace) -> int:
 
         # How each company sits against the ones like it. Worked out here
         # because it needs the database, and while the connection is still open.
-        contexts = {
-            candidate.filing.accession: describe_category(
-                connection,
-                candidate,
-                since=quarter_start(end),
-                # domain, not name. Judgements are stored under the short
-                # label; `name` is the human description, and filtering on it
-                # matches nothing at all — silently, which is the problem.
-                theme=thesis.domain,
-            )
-            for candidate in run.interesting
-        }
+        # domain, not name. Judgements are stored under the short label;
+        # `name` is the human description, and filtering on it matches nothing
+        # at all — silently, which is the problem.
+        contexts = category_lines(
+            connection,
+            run.interesting,
+            since=quarter_start(end),
+            theme=thesis.domain,
+        )
 
         clusters = describe_rejection_clusters(
             connection, since=quarter_start(end), theme=thesis.domain

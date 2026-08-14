@@ -16,6 +16,7 @@ from src.candidates import (
     CategoryContext,
     category_context,
     category_counts,
+    category_lines,
     describe_category,
     describe_rejection_clusters,
     ordinal_suffix,
@@ -265,3 +266,70 @@ def test_judgements_are_filed_under_the_short_domain_label(db) -> None:
 
     assert describe_rejection_clusters(db, theme=thesis.domain) != ""
     assert describe_rejection_clusters(db, theme=thesis.name) == ""
+
+
+def make(accession: str, category: str) -> Candidate:
+    return Candidate(
+        filing=FormDFiling(
+            accession=accession,
+            cik="1",
+            company_name=f"Co {accession}",
+            filed_date="2026-08-14",
+            industry_group="Other Technology",
+        ),
+        verdict="fits",
+        reason="Because.",
+        category=category,
+    )
+
+
+def test_several_of_a_kind_at_once_is_said_once(db) -> None:
+    # The real bug: three AI infrastructure companies arrived in one digest and
+    # each was told it was "the 3rd you've seen", which was true of none of them.
+    arriving = [make(f"acc-{n}", "ai infrastructure") for n in range(3)]
+
+    for candidate in arriving:
+        save_candidate(db, candidate, theme="AI tools")
+
+    lines = category_lines(db, arriving, theme="AI tools")
+
+    assert len(lines) == 1
+    line = next(iter(lines.values()))
+
+    assert "3 ai infrastructure companies in this digest" in line
+    assert "the first of these you've seen" in line
+    assert "3rd" not in line
+
+
+def test_arriving_together_counts_the_ones_seen_before(db) -> None:
+    for n in range(4):
+        store(db, f"old-{n}", "developer tools")
+
+    arriving = [make(f"new-{n}", "developer tools") for n in range(2)]
+
+    for candidate in arriving:
+        save_candidate(db, candidate, theme="Healthcare")
+
+    line = next(iter(category_lines(db, arriving).values()))
+
+    assert "2 developer tools companies in this digest" in line
+    assert "making 6" in line
+
+
+def test_one_of_a_kind_still_reads_as_an_ordinal(db) -> None:
+    for n in range(3):
+        store(db, f"old-{n}", "medical devices")
+
+    arriving = [make("new", "medical devices")]
+    save_candidate(db, arriving[0], theme="Healthcare")
+
+    line = next(iter(category_lines(db, arriving).values()))
+
+    assert "The 4th medical devices company" in line
+
+
+def test_companies_with_no_category_are_skipped(db) -> None:
+    candidate = make("acc-1", "unclear")
+    save_candidate(db, candidate, theme="Healthcare")
+
+    assert category_lines(db, [candidate]) == {}
