@@ -218,3 +218,129 @@ if __name__ == "__main__":
     print(describe_for_prompt(loaded))
     print()
     print("filters:", loaded.filters.model_dump())
+
+
+# A domain name becomes a filename, so it has to survive being one. Letters,
+# digits, spaces and hyphens only — no dots, no slashes, nothing that could walk
+# out of the config directory.
+SAFE_DOMAIN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 \-&]{0,39}$")
+
+
+def thesis_filename(domain: str) -> str:
+    """The file a domain lives in. Lowercase, hyphenated, no surprises."""
+    slug = re.sub(r"[^a-z0-9]+", "-", domain.strip().lower()).strip("-")
+
+    return f"{slug or 'thesis'}.yaml"
+
+
+def find_thesis_path(domain: str, directory: Path | None = None) -> Path | None:
+    """
+    Where a domain's criteria are stored, if they are.
+
+    Matched on the domain inside each file rather than the filename, because the
+    original healthcare thesis lives in thesis.yaml and renaming it would break
+    every command anyone has written down.
+    """
+    for path in thesis_files(directory):
+        try:
+            if load_thesis(path).domain == domain:
+                return path
+        except Exception:  # noqa: BLE001 - an unreadable file is not a match
+            continue
+
+    return None
+
+
+def save_thesis(
+    thesis: Thesis,
+    directory: Path | None = None,
+    original_domain: str | None = None,
+) -> Path:
+    """
+    Write a thesis to disk, replacing the file it already lives in.
+
+    Validation has already happened by the time a Thesis object exists, which is
+    the point of taking one rather than a dict — a malformed edit cannot reach
+    the file, and the daily run cannot be broken from a browser.
+
+    Written to a temporary file and renamed, so a run reading the directory
+    mid-save sees either the old file or the new one, never half of either.
+    """
+    if not SAFE_DOMAIN.match(thesis.domain):
+        raise ThesisError(
+            f"{thesis.domain!r} is not a usable domain name — letters, digits, "
+            "spaces and hyphens only"
+        )
+
+    folder = directory or DEFAULT_THESIS_PATH.parent
+    folder.mkdir(parents=True, exist_ok=True)
+
+    # Creating and editing are different questions, and conflating them meant a
+    # second thesis with an existing name silently overwrote the first instead
+    # of being refused.
+    if original_domain:
+        path = find_thesis_path(original_domain, folder)
+
+        if path is None:
+            raise ThesisError(f"there is no thesis for {original_domain!r} to edit")
+
+        if thesis.domain != original_domain:
+            if find_thesis_path(thesis.domain, folder) is not None:
+                raise ThesisError(f"a thesis for {thesis.domain!r} already exists")
+    else:
+        if find_thesis_path(thesis.domain, folder) is not None:
+            raise ThesisError(f"a thesis for {thesis.domain!r} already exists")
+
+        path = folder / thesis_filename(thesis.domain)
+
+    body = yaml.safe_dump(
+        thesis.model_dump(mode="json"),
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
+        width=80,
+    )
+
+    header = (
+        f"# {thesis.name}\n"
+        "#\n"
+        "# Edited from the website. Everything here is plain text on purpose —\n"
+        "# what reaches an inbox should be arguable without touching code.\n\n"
+    )
+
+    temporary = path.with_suffix(".yaml.tmp")
+    temporary.write_text(header + body, encoding="utf-8")
+    temporary.replace(path)
+
+    return path
+
+
+def delete_thesis(domain: str, directory: Path | None = None) -> bool:
+    """
+    Remove a domain's criteria.
+
+    Judgements already made under it are left alone. They are a record of what
+    was decided and when, and deleting them because the criteria changed would
+    be erasing history to tidy a menu.
+    """
+    path = find_thesis_path(domain, directory)
+
+    if path is None:
+        return False
+
+    path.unlink()
+
+    return True
+
+
+def load_all_theses(directory: Path | None = None) -> list[Thesis]:
+    """Every readable thesis on disk, by domain."""
+    loaded: list[Thesis] = []
+
+    for path in thesis_files(directory):
+        try:
+            loaded.append(load_thesis(path))
+        except Exception:  # noqa: BLE001 - one bad file is not all of them
+            continue
+
+    return sorted(loaded, key=lambda t: t.domain)

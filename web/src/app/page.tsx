@@ -226,12 +226,20 @@ function CandidateList() {
             Deal Radar
           </h1>
 
-          <Link
-            href="/analysis"
-            className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            Analysis →
-          </Link>
+          <span className="flex items-baseline gap-5">
+            <Link
+              href="/analysis"
+              className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              Analysis
+            </Link>
+            <Link
+              href="/criteria"
+              className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              Criteria
+            </Link>
+          </span>
 
           <p className="label">
             {meta ? (

@@ -11,6 +11,7 @@ export type ChatAnswer = Schemas["ChatAnswer"];
 export type Detail = Schemas["CompanyDetail"];
 export type FundingRound = Schemas["FundingRound"];
 export type Analysis = Schemas["Analysis"];
+export type Thesis = Schemas["Thesis"];
 export type Market = Schemas["Market"];
 export type DealSizes = Schemas["DealSizesRow"];
 export type Verdict = Candidate["verdict"];

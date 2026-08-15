@@ -658,3 +658,105 @@ def test_a_compose_link_appears_once_an_address_is_known() -> None:
     body = client.get("/api/candidates/acc-1/detail").json()
 
     assert "hello%40genomenon.com" in body["compose_url"]
+
+
+@pytest.fixture
+def config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point thesis reading and writing at a temporary directory."""
+    import src.thesis as thesis_module
+
+    folder = tmp_path / "config"
+    folder.mkdir()
+
+    monkeypatch.setattr(
+        thesis_module, "DEFAULT_THESIS_PATH", folder / "thesis.yaml"
+    )
+    monkeypatch.setattr(api_module, "available_themes", lambda: [])
+
+    return folder
+
+
+def criteria(domain: str = "Robotics") -> dict:
+    return {
+        "domain": domain,
+        "name": f"{domain} companies",
+        "description": "Worth reading.",
+        "include": ["arms and actuators"],
+        "exclude": ["toys"],
+        "sec_industry_groups": ["Other Technology"],
+    }
+
+
+def test_writing_and_reading_criteria_over_http(config) -> None:
+    written = client.put("/api/theses", json={"thesis": criteria()})
+
+    assert written.status_code == 200
+
+    listed = client.get("/api/theses").json()
+
+    assert [t["domain"] for t in listed] == ["Robotics"]
+    assert listed[0]["include"] == ["arms and actuators"]
+
+
+def test_malformed_criteria_never_reach_a_file(config) -> None:
+    # An empty include list matches nothing, which is a silent way to switch a
+    # domain off while it still looks configured.
+    broken = criteria()
+    broken["include"] = []
+
+    assert client.put("/api/theses", json={"thesis": broken}).status_code == 422
+    assert list(config.glob("*.yaml")) == []
+
+
+def test_a_domain_name_cannot_write_outside_the_config_directory(config) -> None:
+    escaping = criteria(domain="../../etc/passwd")
+
+    assert client.put("/api/theses", json={"thesis": escaping}).status_code == 422
+    assert list(config.glob("*.yaml")) == []
+
+
+def test_a_duplicate_domain_is_refused_rather_than_overwriting(config) -> None:
+    client.put("/api/theses", json={"thesis": criteria()})
+
+    second = criteria()
+    second["include"] = ["something completely different"]
+
+    assert client.put("/api/theses", json={"thesis": second}).status_code == 422
+
+    # The original survived.
+    assert client.get("/api/theses").json()[0]["include"] == ["arms and actuators"]
+
+
+def test_editing_replaces_rather_than_duplicating(config) -> None:
+    client.put("/api/theses", json={"thesis": criteria()})
+
+    edited = criteria()
+    edited["include"] = ["arms, actuators and grippers"]
+
+    response = client.put(
+        "/api/theses",
+        json={"thesis": edited, "original_domain": "Robotics"},
+    )
+
+    assert response.status_code == 200
+
+    listed = client.get("/api/theses").json()
+
+    assert len(listed) == 1
+    assert listed[0]["include"] == ["arms, actuators and grippers"]
+
+
+def test_deleting_criteria_keeps_the_judgements(config) -> None:
+    client.put("/api/theses", json={"thesis": criteria()})
+    seed(candidate(name="Robot Co", accession="acc-r"), theme="Robotics")
+
+    body = client.delete("/api/theses/Robotics").json()
+
+    assert body["deleted"] == "Robotics"
+    # History is not erased because the criteria changed.
+    assert body["judgements_kept"] == 1
+    assert client.get("/api/theses").json() == []
+
+
+def test_deleting_criteria_that_do_not_exist_is_a_404(config) -> None:
+    assert client.delete("/api/theses/Nothing").status_code == 404

@@ -421,6 +421,32 @@ of styling goes through it.
 properties. A `@property` isn't serialised and would never reach the browser, which
 has already cost time twice on this project.
 
+### Editing criteria from the browser
+
+`/criteria` can create, edit and delete thesis files. That is the only place the
+website writes something the radar depends on, so three things guard it.
+
+**The body is validated as a `Thesis` before a file is touched.** Same model the
+pipeline reads, so a malformed edit cannot reach disk and break tomorrow's run.
+
+**A domain name becomes a filename**, so `SAFE_DOMAIN` allows letters, digits,
+spaces and hyphens and nothing else — no dots, no slashes, nothing that walks out
+of `config/`.
+
+**Writes go to a temporary file and are renamed**, so a run reading the directory
+mid-save sees the old file or the new one, never half of either.
+
+Creating and editing are separate cases and conflating them is a real bug: with
+one code path, saving a thesis whose name already exists silently overwrote the
+other instead of being refused. `save_thesis` takes `original_domain` to tell them
+apart.
+
+Deleting criteria leaves the judgements made under them. They record what was
+decided and when, and erasing them to tidy a menu is rewriting history. The
+original healthcare thesis also keeps its filename — it lives in `thesis.yaml`,
+every written-down command points there, and matching on the domain inside each
+file rather than the filename is what stops an edit renaming it.
+
 ### More than one domain
 
 One thesis file per domain in `config/`. Two things make that work, and both were

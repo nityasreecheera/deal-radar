@@ -54,7 +54,15 @@ from src.contact import gmail_compose_url, gmail_search_url
 from src.models import FitVerdict
 from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
-from src.thesis import ThesisError, available_themes, load_thesis
+from src.thesis import (
+    Thesis,
+    ThesisError,
+    available_themes,
+    delete_thesis,
+    load_all_theses,
+    load_thesis,
+    save_thesis,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -473,6 +481,67 @@ def record_one_outreach(accession: str, outreach: Outreach) -> StoredCandidate:
         )
 
     return updated
+
+
+class ThesisEdit(BaseModel):
+    """A set of criteria as the browser sends it back."""
+
+    thesis: Thesis
+
+    # Which domain this replaces. Absent means a new one, and the difference
+    # matters: without it, saving a thesis whose name already exists would
+    # overwrite the other one instead of being refused.
+    original_domain: str | None = None
+
+
+@app.get("/api/theses", response_model=list[Thesis])
+def list_theses() -> list[Thesis]:
+    """Every set of criteria on disk."""
+    return load_all_theses()
+
+
+@app.put("/api/theses", response_model=Thesis, responses={422: {"model": ErrorBody}})
+def write_thesis(edit: ThesisEdit) -> Thesis:
+    """
+    Create or replace a set of criteria.
+
+    The body arrives as a Thesis, so anything malformed is rejected by
+    validation before a file is touched. That is the point of the seam: the
+    website can change what reaches an inbox, and cannot break the daily run
+    by writing something the radar will fail to read tomorrow morning.
+    """
+    try:
+        save_thesis(edit.thesis, original_domain=edit.original_domain)
+    except ThesisError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"ok": False, "errors": [str(exc)]},
+        ) from exc
+
+    return edit.thesis
+
+
+@app.delete("/api/theses/{domain}", responses={404: {"model": ErrorBody}})
+def remove_thesis(domain: str) -> dict:
+    """
+    Delete a set of criteria.
+
+    Judgements already made under it are kept. They record what was decided and
+    when, and erasing them because the criteria changed would be rewriting
+    history to tidy a menu.
+    """
+    if not delete_thesis(domain):
+        raise HTTPException(
+            status_code=404,
+            detail={"ok": False, "errors": [f"no criteria for {domain!r}"]},
+        )
+
+    with closing(connect()) as connection:
+        kept = connection.execute(
+            "SELECT COUNT(*) AS n FROM candidate WHERE theme = ?", (domain,)
+        ).fetchone()["n"]
+
+    return {"deleted": domain, "judgements_kept": kept}
 
 
 @app.get("/api/analysis", response_model=Analysis)
