@@ -157,13 +157,21 @@ export default function AnalysisPage() {
               What each domain has found
             </h2>
             <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-              Every set of criteria the radar is running, and what has come out
-              of each. A domain with nothing next to it has been set up but has
+              Every set of criteria the radar is running, and what each one
+              decided. A domain with nothing next to it has been set up but has
               not run yet.
+              <br />
+              <br />
+              Each domain judges a company for itself, so the same company can
+              be a fit for one and firmly not for another — Cornelis Networks
+              fits AI infra and is rejected by AI tools, because one is about
+              hardware and the other is not. That also means these rows count
+              judgements rather than companies, and a company examined by three
+              domains appears in three of them.
             </p>
 
             <Table
-              head={["domain", "companies", "worth showing", "rejected", "couldn't tell"]}
+              head={["domain", "judged", "worth showing", "rejected", "couldn't tell"]}
               rows={domains.map((row) => [
                 row.domain,
                 row.judged ? String(row.judged) : "not run yet",

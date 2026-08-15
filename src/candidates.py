@@ -1156,9 +1156,17 @@ def market_view(
         clauses.append("theme = ?")
         parameters.append(theme)
 
+    # One row per company, not per judgement.
+    #
+    # A company judged by three domains has three rows, and across all domains
+    # it would land in the amounts list three times — quietly weighting the
+    # median toward whatever companies happen to interest several theses at
+    # once. Reading a single domain this never arose, so the bug only appeared
+    # when the fifth domain did.
     rows = connection.execute(
         "SELECT category, offering_amount, state, incorporated, filed_date "
-        "FROM candidate WHERE " + " AND ".join(clauses),
+        "FROM candidate WHERE " + " AND ".join(clauses) + " "
+        "GROUP BY canonical_name",
         parameters,
     ).fetchall()
 
@@ -1171,7 +1179,8 @@ def market_view(
         counted_parameters.append(theme)
 
     everything = connection.execute(
-        "SELECT COUNT(*) AS n FROM candidate WHERE " + " AND ".join(counted),
+        "SELECT COUNT(DISTINCT canonical_name) AS n FROM candidate WHERE "
+        + " AND ".join(counted),
         counted_parameters,
     ).fetchone()["n"]
 

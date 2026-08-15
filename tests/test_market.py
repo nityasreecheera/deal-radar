@@ -148,3 +148,39 @@ def test_an_empty_database_says_nothing(db) -> None:
 
     assert view.companies == 0
     assert view.deal_sizes.median is None
+
+
+def test_a_company_judged_by_several_domains_is_counted_once(db) -> None:
+    """
+    Across all domains, a company with three judgements would land in the
+    amounts list three times and quietly weight the median toward whatever
+    interests several theses at once. Reading one domain this never arose.
+    """
+    for n in range(MIN_FOR_A_BENCHMARK):
+        store(db, f"acc-{n}", amount=2_000_000)
+
+    # One company, judged by three domains, raising far more than the rest.
+    for theme in ("Healthcare", "AI tools", "AI infra"):
+        save_candidate(
+            db,
+            Candidate(
+                filing=FormDFiling(
+                    accession="shared",
+                    cik="1",
+                    company_name="Cornelis Networks, Inc.",
+                    filed_date="2026-08-01",
+                    industry_group="Other Technology",
+                    total_offering_amount=245_000_000,
+                ),
+                verdict="fits",
+                reason="Because.",
+                category="clinical workflow",
+            ),
+            theme=theme,
+        )
+
+    view = market_view(db)
+
+    # Nine companies, not eleven.
+    assert view.companies == MIN_FOR_A_BENCHMARK + 1
+    assert view.deal_sizes.count == MIN_FOR_A_BENCHMARK + 1
