@@ -266,14 +266,6 @@ def save_thesis(
     Written to a temporary file and renamed, so a run reading the directory
     mid-save sees either the old file or the new one, never half of either.
     """
-    # "Stealth" is a view the interface reserves, not a thesis. A file using
-    # that name would appear in the same dropdown and silently shadow it.
-    if thesis.domain.strip().lower() == "stealth":
-        raise ThesisError(
-            "'Stealth' is reserved — it is the view of companies nobody could "
-            "identify, not a set of criteria. Pick another name."
-        )
-
     if not SAFE_DOMAIN.match(thesis.domain):
         raise ThesisError(
             f"{thesis.domain!r} is not a usable domain name — letters, digits, "

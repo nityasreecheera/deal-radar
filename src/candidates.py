@@ -285,19 +285,6 @@ def find_by_company(
     return [StoredCandidate(**dict(row)) for row in rows]
 
 
-# A view rather than a thesis. There are no criteria to write: these are the
-# companies no thesis could judge, filtered to the ones whose shape says stealth
-# rather than nothing — recently incorporated, taking real money, and findable
-# nowhere. A company incorporated this year raising $30m with no website has not
-# failed to be interesting; it has not launched.
-STEALTH_VIEW = "Stealth"
-
-# Enough money that somebody meant it, recent enough that no web presence is
-# explained by not having launched rather than by not existing.
-STEALTH_MIN_RAISE = 1_000_000
-STEALTH_MAX_AGE_YEARS = 1
-
-
 def list_candidates(
     connection: sqlite3.Connection,
     verdicts: list[str] | None = None,
@@ -306,7 +293,6 @@ def list_candidates(
     theme: str | None = None,
     unread_only: bool = False,
     limit: int | None = None,
-    stealth: bool = False,
 ) -> list[StoredCandidate]:
     """
     List judgements, newest filing first.
@@ -320,19 +306,7 @@ def list_candidates(
     clauses: list[str] = []
     parameters: list[object] = []
 
-    if stealth:
-        # Deliberately ignores `theme`: a company nobody could identify was
-        # rejected by every domain that saw it, so filtering by one of them
-        # would ask which thesis failed hardest.
-        year = int(datetime.now(UTC).year)
-
-        clauses.append("COALESCE(user_verdict, verdict) = 'unknown'")
-        clauses.append("offering_amount >= ?")
-        clauses.append("incorporated >= ?")
-        parameters.append(STEALTH_MIN_RAISE)
-        parameters.append(year - STEALTH_MAX_AGE_YEARS)
-
-    if verdicts and not stealth:
+    if verdicts:
         # COALESCE, not `verdict`, so a company the analyst re-labelled appears
         # under the label they gave it. Filtering on the model's answer would
         # make an override look like it had not been saved.
@@ -348,7 +322,7 @@ def list_candidates(
         clauses.append("filed_date <= ?")
         parameters.append(until)
 
-    if theme and not stealth:
+    if theme:
         clauses.append("theme = ?")
         parameters.append(theme)
 
@@ -357,11 +331,6 @@ def list_candidates(
 
     if clauses:
         query.append("WHERE " + " AND ".join(clauses))
-
-    # Between WHERE and ORDER BY, which is the only place SQL accepts it. One
-    # row per company rather than one per domain that failed to place it.
-    if stealth:
-        query.append("GROUP BY canonical_name")
 
     query.append("ORDER BY filed_date DESC, offering_amount DESC")
 
