@@ -139,8 +139,18 @@ def run_radar(
             # per company and a second one alone would exhaust the free tier.
             enrichment = recall_enrichment(connection, filing) or enrich(filing)
         except Exception as exc:  # noqa: BLE001 - one bad lookup must not stop the run
+            # Skipped, not judged on nothing.
+            #
+            # Judging with empty evidence returns "unknown", which means "we
+            # looked and could not tell" — and the company is then marked as
+            # seen and never looked at again. When the lookup itself failed,
+            # that records a finding we never made. A search quota running out
+            # filed 33 companies as unidentifiable in one morning.
+            #
+            # An enrichment that returns nothing is different and still judged:
+            # that is a real "we looked and found nothing".
             problems.append(f"{filing.company_name}: enrichment failed ({exc})")
-            enrichment = Enrichment()
+            continue
 
         try:
             candidate = judge(filing, enrichment, thesis)

@@ -253,7 +253,16 @@ def test_a_failed_judgement_is_not_marked_as_seen(db) -> None:
     assert any("judgement failed" in problem for problem in run.problems)
 
 
-def test_a_failed_enrichment_still_gets_judged(db) -> None:
+def test_a_failed_enrichment_is_reported_and_the_run_continues(db) -> None:
+    """
+    Replaces a test that asserted the company was judged anyway.
+
+    That was wrong, and stayed wrong until a search quota ran out and filed 33
+    companies as unidentifiable in one morning. Judging on evidence that was
+    never gathered records a finding nobody made — and marks the company seen,
+    so the mistake is permanent. The run still continues; the company is simply
+    left for tomorrow.
+    """
     def broken_enrich(f):
         raise RuntimeError("search backend down")
 
@@ -262,13 +271,15 @@ def test_a_failed_enrichment_still_gets_judged(db) -> None:
         thesis(),
         "2026-07-26",
         "2026-07-29",
-        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        fetch_filings=fetcher(
+            [filing("Acme Health, Inc."), filing("Other Co", accession="acc-2")]
+        ),
         enrich=broken_enrich,
         judge=verdict_judge("maybe", "No information available."),
     )
 
-    assert len(run.candidates) == 1
-    assert any("enrichment failed" in problem for problem in run.problems)
+    assert run.candidates == []
+    assert len(run.problems) == 2
 
 
 def test_interesting_puts_fits_before_maybe_and_drops_no_fit(db) -> None:
@@ -471,3 +482,46 @@ def test_a_lookup_another_domain_paid_for_is_reused(db) -> None:
     # evidence was recalled rather than re-fetched.
     assert len(run.candidates) == 1
     assert lookups == 1
+
+
+def test_a_failed_lookup_is_not_recorded_as_a_finding(db) -> None:
+    """
+    "Unknown" means we looked and could not tell. When the lookup itself fails
+    — a quota, a network error — judging on empty evidence records a finding
+    nobody made, and marks the company seen so it is never retried. A search
+    quota running out filed 33 companies as unidentifiable in one morning.
+    """
+    def broken_enrich(filing):
+        raise RuntimeError("This request exceeds your plan's set usage limit")
+
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=broken_enrich,
+        judge=verdict_judge(),
+    )
+
+    assert run.candidates == []
+    assert any("enrichment failed" in p for p in run.problems)
+    # Not marked, so tomorrow tries again.
+    assert count_seen(db) == 0
+
+
+def test_a_lookup_that_finds_nothing_is_still_judged(db) -> None:
+    # Different case: the search worked and returned nothing. That is a real
+    # "we looked and could not tell", and belongs on the record.
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Acme Health, Inc.")]),
+        enrich=lambda f: Enrichment(),
+        judge=verdict_judge(verdict="unknown", reason="No evidence."),
+    )
+
+    assert len(run.candidates) == 1
+    assert count_seen(db) == 1

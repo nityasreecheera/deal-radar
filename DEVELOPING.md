@@ -540,6 +540,22 @@ A sighting in `seen_for_theme` with no matching judgement is a hole rather than 
 memory — that domain will skip the company forever without ever having judged it.
 Worth checking after anything that touches judgements.
 
+**A failed lookup is not a finding.** "Unknown" means the radar looked and could
+not tell. When the lookup itself fails — a quota, a network error — judging on
+evidence that was never gathered records a conclusion nobody reached, and marks
+the company as seen so it is never retried. The Tavily free tier running out
+filed 172 companies that way in one morning, and the digest reported them as
+"could not be identified at all".
+
+Enrichment exceptions now skip the company entirely, exactly as judgement
+failures already did. An enrichment that *returns* nothing is a different case
+and is still judged: that is a real "we looked and found nothing".
+
+This is the third instance of the same mistake in this codebase — EDGAR search
+failures reading as a quiet day, sightings surviving lost judgements, and now
+this. Any step that can fail needs to leave the company retryable rather than
+recording an answer it did not have.
+
 **Enrichment is reused across domains.** `recall_enrichment()` reads the website
 and description a previous judgement already stored. Enrichment is the expensive
 step — a web search per company against a free tier of about 500 a month — and
