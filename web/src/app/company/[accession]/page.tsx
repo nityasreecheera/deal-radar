@@ -154,7 +154,7 @@ export default function CompanyPage({
             {candidate.theme && (
               <>
                 <span className="text-[var(--color-rule)]">·</span>
-                <span>judged by {candidate.theme}</span>
+                <span>{candidate.theme}</span>
               </>
             )}
           </p>
