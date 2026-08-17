@@ -13,6 +13,12 @@ import {
 /**
  * The market, as the filings describe it.
  *
+ * One breakdown per view, always by the reader's own criteria: across all
+ * domains it splits by domain, inside one it splits by that thesis's "looking
+ * for" lines. The global category vocabulary is deliberately absent — it fits
+ * healthcare, which was written first, and draws distinctions about AI
+ * infrastructure that nobody would ever make.
+ *
  * Answers what nobody can work out by reading companies one a week, weeks
  * apart: what a normal raise looks like here, how early these companies are,
  * and how much of the round is usually gone by the time it surfaces.
@@ -102,11 +108,6 @@ export default function AnalysisPage() {
   const sizes: DealSizes = market.deal_sizes ?? { count: 0 };
   const ages = market.company_age ?? {};
   const ageBuckets = data.round_age ?? {};
-
-  // Biggest first, so the categories worth benchmarking lead.
-  const byCategory = Object.entries(market.by_category ?? {}).sort(
-    (first, second) => (second[1].count ?? 0) - (first[1].count ?? 0),
-  ) as [string, DealSizes][];
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -312,35 +313,6 @@ export default function AnalysisPage() {
             </>
           )}
 
-          {/* Only across all domains. Inside one, the criteria's own lines
-              already split it — and they carry the same figures, so keeping
-              both puts two breakdowns with different denominators under
-              headings that sound identical. */}
-          {!domain && byCategory.length > 0 && (
-            <div className="mt-6">
-              <h3 className="label mb-2">
-                The same thing, split by type of company
-              </h3>
-              <Table
-                head={[
-                  "type of company",
-                  "how many",
-                  "typical raise",
-                  "most land between",
-                ]}
-                rows={byCategory.map(([name, row]) => [
-                  name,
-                  String(row.count),
-                  money(row.median),
-                  `${money(row.lower_quartile)} – ${money(row.upper_quartile)}`,
-                ])}
-              />
-              <p className="mt-2 text-[0.8125rem] text-[var(--color-ink-faint)]">
-                Only shown for types with at least eight companies. With fewer
-                than that, an average is just a coincidence.
-              </p>
-            </div>
-          )}
         </section>
 
         <section>
