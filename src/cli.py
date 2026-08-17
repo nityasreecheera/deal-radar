@@ -104,6 +104,12 @@ def command_run(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
 
+    # Handed back before the dry-run exit, not after. A rehearsal that collects
+    # nothing is not a rehearsal — `--all --dry-run` printed four domain headers
+    # and no digest, which looked like the run finding nothing rather than the
+    # code dropping it on the floor.
+    args._digest = digest
+
     if args.dry_run:
         print(
             "dry run — nothing was marked as seen, so this can be repeated",
@@ -111,8 +117,6 @@ def command_run(args: argparse.Namespace) -> int:
         )
 
         return 0
-
-    args._digest = digest
 
     path = save_digest(digest, run)
     print(f"saved {path}", file=sys.stderr)
