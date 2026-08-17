@@ -421,6 +421,23 @@ of styling goes through it.
 properties. A `@property` isn't serialised and would never reach the browser, which
 has already cost time twice on this project.
 
+### Sub-domains come from the criteria, not from a list
+
+`category` is a fixed global vocabulary and cannot divide a domain. It has seven
+buckets for healthcare and one for energy, because healthcare was written first —
+so Energy's eighteen accepted companies all land in "energy and climate" and the
+breakdown says nothing at all.
+
+`subdomain` is which of the thesis's own `include` lines a company matched. The
+divisions are therefore defined by whoever wrote the criteria, differ per domain
+by construction, and change when the criteria are edited.
+
+Stored as the line's text rather than its index: the criteria are edited from a
+web page, and an index would silently point at the wrong line the moment someone
+reorders them. `matched_line()` holds the model to the lines on file — a
+paraphrase would invent a division nobody wrote and fragment the counting this
+exists to produce.
+
 ### Editing criteria from the browser
 
 `/criteria` can create, edit and delete thesis files. That is the only place the

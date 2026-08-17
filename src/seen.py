@@ -228,6 +228,7 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
         "outreach_at",
         "ALTER TABLE candidate ADD COLUMN outreach_at TEXT",
     ),
+    ("candidate", "subdomain", "ALTER TABLE candidate ADD COLUMN subdomain TEXT"),
 )
 
 

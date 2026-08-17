@@ -60,6 +60,12 @@ Rules that matter more than being decisive:
 - Also give a one-line summary of what the company does, in plain terms, or null
   if the evidence does not say. The summary describes the business; the reason
   explains the verdict. Do not merge them.
+- Say which line of the thesis it matches, copied exactly from the "Looking
+  for" list, or null if none of them fit. These are the domain's own
+  sub-divisions, so this is what tells an analyst that eight of their
+  eighteen energy companies are batteries and three are nuclear. A global
+  category list cannot do that job: it has one bucket for energy and seven for
+  healthcare, because healthcare was written first.
 - Finally, put the company in exactly one category from the list given. The
   category describes what kind of business it is and is independent of the
   verdict: a drug company outside the thesis and a drug company inside it are
@@ -86,6 +92,12 @@ class Judgement(BaseModel):
     # What kind of business, independent of whether it fits. Counting these is
     # what turns "here is a company" into "this is the fifth of these".
     category: CompanyCategory = "unclear"
+
+    # Which of the thesis's own "looking for" lines this matches. Free text
+    # rather than an index, because the criteria are edited from a web page and
+    # an index would silently point at the wrong line the moment someone
+    # reorders them.
+    matched: str | None = None
 
     @property
     def is_interesting(self) -> bool:
@@ -218,7 +230,8 @@ Reply with JSON only:
 {{"verdict": "fits" | "maybe" | "unknown" | "no_fit",
   "reason": "one specific sentence explaining the verdict",
   "summary": "one line on what the company does, or null if unknown",
-  "category": one of {categories}}}
+  "category": one of {categories},
+  "matched": the "Looking for" line it matches, copied exactly, or null}}
 """
 
 
@@ -266,8 +279,36 @@ def judge_filing(
         filing=filing,
         verdict=judgement.verdict,
         category=judgement.category,
+        subdomain=matched_line(judgement.matched, thesis),
         reason=judgement.reason,
         summary=judgement.summary,
         website=enrichment.website,
         description=enrichment.description,
     )
+
+
+def matched_line(claimed: str | None, thesis: Thesis) -> str | None:
+    """
+    Hold the model to the thesis's own words.
+
+    It is asked to copy a line back verbatim and mostly does, but a paraphrase
+    would create a sub-division nobody wrote and quietly fragment the counting —
+    which is the one thing this exists to avoid. Anything that is not one of the
+    lines on file is dropped.
+    """
+    if not claimed:
+        return None
+
+    wanted = claimed.strip().lower()
+
+    for line in thesis.include:
+        if line.strip().lower() == wanted:
+            return line
+
+    # A near miss is still worth keeping: models drop a trailing clause more
+    # often than they invent a whole category.
+    for line in thesis.include:
+        if wanted and (wanted in line.lower() or line.lower().startswith(wanted[:30])):
+            return line
+
+    return None

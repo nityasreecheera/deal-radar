@@ -98,6 +98,7 @@ export default function AnalysisPage() {
   // every field below it becomes an error.
   const domains = data.domains ?? [];
   const shortlist = data.shortlist ?? [];
+  const subdomains = data.subdomains ?? [];
   const market: Market = data.market ?? { companies: 0, excluded: 0 };
   const sizes: DealSizes = market.deal_sizes ?? { count: 0 };
   const ages = market.company_age ?? {};
@@ -180,6 +181,67 @@ export default function AnalysisPage() {
             />
           </section>
         )}
+        {domain && subdomains.length > 0 && (
+          <section>
+            <h2 className="font-display mb-1 text-[1.125rem]">
+              What kind of {domain} companies
+            </h2>
+            <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+              Split by the criteria&apos;s own &ldquo;looking for&rdquo; lines.
+              Edit those on the{" "}
+              <Link href="/criteria" className="underline underline-offset-2">
+                criteria page
+              </Link>{" "}
+              and this splits differently.
+            </p>
+
+            <div className="max-w-2xl space-y-2">
+              {subdomains.map((row) => {
+                const line = String(
+                  (row as Record<string, unknown>).subdomain ?? "",
+                );
+                const companies = Number(
+                  (row as Record<string, unknown>).companies ?? 0,
+                );
+                const raised = Number(
+                  (row as Record<string, unknown>).raised ?? 0,
+                );
+                const largest = Math.max(
+                  ...subdomains.map((r) =>
+                    Number((r as Record<string, unknown>).companies ?? 0),
+                  ),
+                  1,
+                );
+
+                return (
+                  <div key={line} className="flex items-center gap-3 text-sm">
+                    <span className="w-64 shrink-0 text-[var(--color-ink-soft)]">
+                      {line}
+                    </span>
+
+                    <span
+                      className="h-[10px] shrink-0 bg-[var(--color-fits)]"
+                      style={{
+                        width: `${Math.max((160 * companies) / largest, 3)}px`,
+                      }}
+                    />
+
+                    <span className="tabular text-[var(--color-ink-faint)]">
+                      {companies}
+                      {raised > 0 && (
+                        <span className="text-[var(--color-ink-soft)]">
+                          {"  "}
+                          {money(raised)} raised
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {domain && shortlist.length > 0 && (
           <section>
             <h2 className="font-display mb-1 text-[1.125rem]">

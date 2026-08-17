@@ -143,11 +143,11 @@ def save_candidate(
             website, description, offering_amount, filed_date,
             industry_group, city, state, incorporated, judged_at, theme,
             people, amount_sold, investor_count, jurisdiction, entity_type, cik,
-            summary, minimum_investment, first_sale_date, category
+            summary, minimum_investment, first_sale_date, category, subdomain
         )
         VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?
+            ?, ?, ?, ?
         )
         ON CONFLICT (accession, theme) DO UPDATE SET
             verdict         = excluded.verdict,
@@ -178,7 +178,8 @@ def save_candidate(
             first_sale_date = COALESCE(
                 excluded.first_sale_date, candidate.first_sale_date
             ),
-            category        = COALESCE(excluded.category, candidate.category)
+            category        = COALESCE(excluded.category, candidate.category),
+            subdomain       = COALESCE(excluded.subdomain, candidate.subdomain)
         """,
         (
             filing.accession,
@@ -210,6 +211,7 @@ def save_candidate(
             filing.minimum_investment,
             filing.first_sale_date,
             candidate.category,
+            candidate.subdomain,
         ),
     )
     connection.commit()
@@ -1327,3 +1329,41 @@ def domain_tallies(
         found.setdefault(domain, DomainTally(domain=domain))
 
     return sorted(found.values(), key=lambda tally: (-tally.judged, tally.domain))
+
+
+def subdomain_counts(
+    connection: sqlite3.Connection,
+    theme: str,
+    fits_only: bool = True,
+) -> list[dict]:
+    """
+    How one domain divides up, using its own criteria as the divisions.
+
+    A global category list cannot do this. It has seven buckets for healthcare
+    and one for energy, because healthcare was written first — so Energy's
+    eighteen companies all land in "energy and climate" and the breakdown says
+    nothing. The thesis's own "looking for" lines are the right divisions, and
+    they change when someone edits the criteria, which is what you want.
+    """
+    clauses = ["theme = ?", "subdomain IS NOT NULL", "subdomain != ''"]
+    parameters: list[object] = [theme]
+
+    if fits_only:
+        clauses.append("COALESCE(user_verdict, verdict) = 'fits'")
+
+    rows = connection.execute(
+        "SELECT subdomain, COUNT(*) AS companies, "
+        "       SUM(offering_amount) AS raised "
+        "FROM candidate WHERE " + " AND ".join(clauses) + " "
+        "GROUP BY subdomain ORDER BY companies DESC",
+        parameters,
+    ).fetchall()
+
+    return [
+        {
+            "subdomain": row["subdomain"],
+            "companies": row["companies"],
+            "raised": row["raised"] or 0,
+        }
+        for row in rows
+    ]

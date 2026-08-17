@@ -242,6 +242,11 @@ class Candidate(BaseModel):
     reason: str = Field(min_length=1)
     category: CompanyCategory = "unclear"
 
+    # Which of the thesis's own "looking for" lines this matched. The domain's
+    # sub-divisions, defined by whoever wrote the criteria rather than by a
+    # global list that happens to suit one domain.
+    subdomain: str | None = None
+
     # What the company does, in one line. Distinct from `reason`, which explains
     # the verdict. A detail view needs the former and the digest needs the
     # latter, and a search snippet is a poor substitute for either.

@@ -39,6 +39,7 @@ from src.candidates import (
     market_view,
     quarter_start,
     record_decision,
+    subdomain_counts,
     record_outreach,
     source_breakdown,
 )
@@ -440,6 +441,10 @@ class Analysis(BaseModel):
     # selected: across all of them it would be a list of 45 with no shape, and
     # the point of picking a domain is to see what is actually in it.
     shortlist: list[StoredCandidate] = Field(default_factory=list)
+
+    # How the selected domain divides up, by its own criteria rather than by a
+    # global category list that suits whichever domain was written first.
+    subdomains: list[dict] = Field(default_factory=list)
     categories: list[CategoryRow] = Field(default_factory=list)
     sources: list[SourceRow] = Field(default_factory=list)
     round_age: dict[str, int] = Field(default_factory=dict)
@@ -594,6 +599,7 @@ def get_analysis(theme: str | None = None) -> Analysis:
 
         return Analysis(
             judged=judged,
+            subdomains=subdomain_counts(connection, theme) if theme else [],
             shortlist=sorted(
                 shortlist,
                 key=lambda c: (c.offering_amount or 0),
