@@ -1352,18 +1352,32 @@ def subdomain_counts(
         clauses.append("COALESCE(user_verdict, verdict) = 'fits'")
 
     rows = connection.execute(
-        "SELECT subdomain, COUNT(*) AS companies, "
-        "       SUM(offering_amount) AS raised "
-        "FROM candidate WHERE " + " AND ".join(clauses) + " "
-        "GROUP BY subdomain ORDER BY companies DESC",
+        "SELECT subdomain, offering_amount FROM candidate "
+        "WHERE " + " AND ".join(clauses),
         parameters,
     ).fetchall()
 
+    grouped: dict[str, list[int]] = {}
+    counts: dict[str, int] = {}
+
+    for row in rows:
+        counts[row["subdomain"]] = counts.get(row["subdomain"], 0) + 1
+
+        if row["offering_amount"]:
+            grouped.setdefault(row["subdomain"], []).append(row["offering_amount"])
+
+    def typical(amounts: list[int]) -> int | None:
+        # Two is enough here. This describes a handful of companies someone will
+        # read in full, not a market — and saying nothing about a line with two
+        # companies is less useful than saying "these two were about this big".
+        return int(statistics.median(amounts)) if len(amounts) >= 2 else None
+
     return [
         {
-            "subdomain": row["subdomain"],
-            "companies": row["companies"],
-            "raised": row["raised"] or 0,
+            "subdomain": line,
+            "companies": count,
+            "raised": sum(grouped.get(line, [])),
+            "typical": typical(grouped.get(line, [])),
         }
-        for row in rows
+        for line, count in sorted(counts.items(), key=lambda item: -item[1])
     ]

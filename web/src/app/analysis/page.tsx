@@ -205,6 +205,9 @@ export default function AnalysisPage() {
                 const raised = Number(
                   (row as Record<string, unknown>).raised ?? 0,
                 );
+                const typical = Number(
+                  (row as Record<string, unknown>).typical ?? 0,
+                );
                 const largest = Math.max(
                   ...subdomains.map((r) =>
                     Number((r as Record<string, unknown>).companies ?? 0),
@@ -225,12 +228,18 @@ export default function AnalysisPage() {
                       }}
                     />
 
-                    <span className="tabular text-[var(--color-ink-faint)]">
+                    <span className="tabular whitespace-nowrap text-[var(--color-ink-faint)]">
                       {companies}
-                      {raised > 0 && (
+                      {typical ? (
                         <span className="text-[var(--color-ink-soft)]">
-                          {"  "}
-                          {money(raised)} raised
+                          {"  ·  typically "}
+                          {money(typical)}
+                        </span>
+                      ) : null}
+                      {raised > 0 && (
+                        <span>
+                          {"  ·  "}
+                          {money(raised)} in total
                         </span>
                       )}
                     </span>
@@ -303,7 +312,11 @@ export default function AnalysisPage() {
             </>
           )}
 
-          {byCategory.length > 0 && (
+          {/* Only across all domains. Inside one, the criteria's own lines
+              already split it — and they carry the same figures, so keeping
+              both puts two breakdowns with different denominators under
+              headings that sound identical. */}
+          {!domain && byCategory.length > 0 && (
             <div className="mt-6">
               <h3 className="label mb-2">
                 The same thing, split by type of company
