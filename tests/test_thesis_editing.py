@@ -144,3 +144,12 @@ def test_the_original_healthcare_file_keeps_its_name(tmp_path: Path) -> None:
     )
 
     assert find_thesis_path("Healthcare", tmp_path).name == "thesis.yaml"
+
+
+def test_stealth_is_reserved(tmp_path: Path) -> None:
+    # It is a view the interface provides, not criteria. A file with that name
+    # would appear in the same dropdown and silently shadow it.
+    with pytest.raises(ThesisError, match="reserved"):
+        save_thesis(a_thesis(domain="Stealth"), directory=tmp_path)
+
+    assert list(tmp_path.glob("*.yaml")) == []

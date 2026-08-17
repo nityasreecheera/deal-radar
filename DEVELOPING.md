@@ -440,6 +440,26 @@ of styling goes through it.
 properties. A `@property` isn't serialised and would never reach the browser, which
 has already cost time twice on this project.
 
+### Stealth is a view, not a thesis
+
+`Stealth` appears in the domain dropdown and has no file in `config/`. There are
+no criteria to write: it is the companies *no* thesis could identify, narrowed to
+those raising over $1m and incorporated within a year.
+
+The distinction it restores: a company incorporated this year, taking real money,
+findable nowhere, has not failed to be interesting — it has not launched. That is
+a different thing from a shell with no money and no trace, and filing both under
+`unknown` threw it away. 48 of 147 unknowns are the first kind.
+
+It arrives as a theme because the interface has one dropdown, and is translated in
+`get_candidates` so no caller has to know the difference. It ignores `theme`
+entirely — a company nobody could identify was rejected by every domain that saw
+it, so filtering by one of them would be asking which thesis failed hardest — and
+groups by company, since five domains failing to place one company is one company.
+
+`save_thesis` refuses the name, or a file could shadow the view in the same
+dropdown.
+
 ### Sub-domains come from the criteria, not from a list
 
 `category` is a fixed global vocabulary and cannot divide a domain. It has seven

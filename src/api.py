@@ -37,6 +37,7 @@ from src.candidates import (
     mark_viewed,
     domain_tallies,
     market_view,
+    STEALTH_VIEW,
     quarter_start,
     record_decision,
     subdomain_counts,
@@ -247,11 +248,19 @@ def get_meta() -> Meta:
         earliest, latest = date_range(connection)
         in_data = known_themes(connection)
 
+        has_stealth = bool(
+            list_candidates(connection, stealth=True, limit=1)
+        )
+
         return Meta(
             companies_known=count_seen(connection),
             judgements=count_by_verdict(connection),
             unread=count_unread(connection),
-            themes=sorted(set(configured) | set(in_data)),
+            # Stealth last, and only when there is something in it. It is
+            # not a thesis, so it belongs after the real ones rather than
+            # sorted among them alphabetically.
+            themes=sorted(set(configured) | set(in_data))
+            + ([STEALTH_VIEW] if has_stealth else []),
             earliest_filing=earliest,
             latest_filing=latest,
             thesis_name=thesis_name,
@@ -268,21 +277,33 @@ def get_candidates(
     unread_only: bool = False,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> CandidateList:
-    """Judgements, filtered. Every parameter is optional and combines."""
+    """
+    Judgements, filtered. Every parameter is optional and combines.
+
+    "Stealth" arrives as a theme because the interface has one dropdown, but it
+    is not one: it is the companies no thesis could identify, narrowed to those
+    whose shape says stealth rather than nothing. Translated here so no caller
+    has to know the difference.
+    """
+    looking_for_stealth = theme == STEALTH_VIEW
+
     with closing(connect()) as connection:
         found = list_candidates(
             connection,
             verdicts=verdict,
             since=since,
             until=until,
-            theme=theme,
+            theme=None if looking_for_stealth else theme,
             unread_only=unread_only,
             limit=limit,
+            stealth=looking_for_stealth,
         )
 
         return CandidateList(
             count=len(found),
-            unread=count_unread(connection, theme=theme),
+            unread=count_unread(
+                connection, theme=None if looking_for_stealth else theme
+            ),
             candidates=found,
         )
 

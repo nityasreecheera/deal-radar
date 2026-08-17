@@ -201,3 +201,74 @@ def test_judgements_persist_across_connections(tmp_path: Path) -> None:
 
         assert stored is not None
         assert stored.company_name == "Genomenon, Inc."
+
+
+def test_the_stealth_view_finds_the_unidentified_with_money(db) -> None:
+    """
+    A company incorporated this year, raising real money, findable nowhere, has
+    not failed to be interesting — it has not launched. That is a different
+    thing from a shell with no money and no trace, and calling both "unknown"
+    threw the distinction away.
+    """
+    from datetime import UTC, datetime
+
+    from src.candidates import list_candidates
+
+    year = datetime.now(UTC).year
+
+    def store(name, accession, verdict, amount, incorporated):
+        save_candidate(
+            db,
+            Candidate(
+                filing=FormDFiling(
+                    accession=accession,
+                    cik="1",
+                    company_name=name,
+                    filed_date="2026-08-17",
+                    industry_group="Other Technology",
+                    total_offering_amount=amount,
+                    year_of_incorporation=incorporated,
+                ),
+                verdict=verdict,
+                reason="No evidence.",
+            ),
+            theme="Healthcare",
+        )
+
+    store("Stealthy Inc.", "a", "unknown", 30_000_000, year)
+    store("Old Shell LLC", "b", "unknown", 30_000_000, 2011)
+    store("Tiny Nothing", "c", "unknown", 5_000, year)
+    store("Known Co", "d", "fits", 30_000_000, year)
+
+    found = [c.company_name for c in list_candidates(db, stealth=True)]
+
+    assert found == ["Stealthy Inc."]
+
+
+def test_the_stealth_view_shows_a_company_once(db) -> None:
+    # Nobody could identify it, so every domain that saw it said unknown. That
+    # is one company, not five.
+    from datetime import UTC, datetime
+
+    from src.candidates import list_candidates
+
+    for theme in ("Healthcare", "Energy", "Fintech"):
+        save_candidate(
+            db,
+            Candidate(
+                filing=FormDFiling(
+                    accession="shared",
+                    cik="1",
+                    company_name="Stealthy Inc.",
+                    filed_date="2026-08-17",
+                    industry_group="Other Technology",
+                    total_offering_amount=30_000_000,
+                    year_of_incorporation=datetime.now(UTC).year,
+                ),
+                verdict="unknown",
+                reason="No evidence.",
+            ),
+            theme=theme,
+        )
+
+    assert len(list_candidates(db, stealth=True)) == 1
