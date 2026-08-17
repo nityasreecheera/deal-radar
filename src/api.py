@@ -419,6 +419,9 @@ class DomainRow(BaseModel):
     rejected: int = 0
     unknown: int = 0
     latest_filing: str | None = None
+    typical_raise: int | None = None
+    lower_quartile: int | None = None
+    upper_quartile: int | None = None
 
 
 class Analysis(BaseModel):

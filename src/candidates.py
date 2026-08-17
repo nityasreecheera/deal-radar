@@ -1237,7 +1237,14 @@ def market_view(
 
 
 class DomainTally(BaseModel):
-    """How much one domain has found, for a page listing all of them."""
+    """
+    What one domain is worth looking at, for a page listing all of them.
+
+    Deliberately not judged / rejected / couldn't-tell. Those describe how the
+    filter performed, which is a question about the software; someone deciding
+    where to spend an hour wants to know how many companies are worth reading
+    and what a raise looks like there.
+    """
 
     domain: str
     judged: int = 0
@@ -1245,6 +1252,11 @@ class DomainTally(BaseModel):
     rejected: int = 0
     unknown: int = 0
     latest_filing: str | None = None
+
+    # What a raise looks like in this domain, over the companies it accepted.
+    typical_raise: int | None = None
+    lower_quartile: int | None = None
+    upper_quartile: int | None = None
 
     @property
     def has_run(self) -> bool:
@@ -1288,6 +1300,28 @@ def domain_tallies(
         )
         for row in rows
     }
+
+    # Deal sizes over the companies each domain accepted, which is the set a
+    # reader would actually be pricing against.
+    for domain, tally in found.items():
+        amounts = [
+            row["offering_amount"]
+            for row in connection.execute(
+                "SELECT offering_amount FROM candidate WHERE theme = ? "
+                "AND COALESCE(user_verdict, verdict) = 'fits' "
+                "AND offering_amount IS NOT NULL AND offering_amount > 0",
+                (domain,),
+            )
+        ]
+
+        # Three is enough to say "roughly this much" about a shortlist someone
+        # will read in full anyway. The market-wide benchmark needs eight; this
+        # is a different claim about a smaller, hand-checkable set.
+        if len(amounts) >= 3:
+            amounts.sort()
+            tally.typical_raise = int(statistics.median(amounts))
+            tally.lower_quartile = amounts[0]
+            tally.upper_quartile = amounts[-1]
 
     for domain in configured or ():
         found.setdefault(domain, DomainTally(domain=domain))

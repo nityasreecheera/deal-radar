@@ -154,24 +154,28 @@ export default function AnalysisPage() {
         {domains.length > 1 && (
           <section>
             <h2 className="font-display mb-1 text-[1.125rem]">
-              What each domain has found
+              Where the companies are
             </h2>
             <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-              Each domain judges a company for itself, so these count
-              judgements rather than companies — one company seen by three
-              domains appears in three rows.
+              How much there is to read in each domain, and what a raise looks
+              like there.
             </p>
 
             <Table
-              head={["domain", "judged", "worth showing", "rejected", "couldn't tell"]}
+              head={["domain", "worth reading", "typical raise", "range"]}
               rows={domains.map((row) => [
                 row.domain,
-                row.judged ? String(row.judged) : "not run yet",
-                row.fitted ? String(row.fitted) : "—",
-                row.rejected ? String(row.rejected) : "—",
-                row.unknown ? String(row.unknown) : "—",
+                row.fitted
+                  ? String(row.fitted)
+                  : row.judged
+                    ? "none yet"
+                    : "not run yet",
+                money(row.typical_raise),
+                row.lower_quartile
+                  ? `${money(row.lower_quartile)} – ${money(row.upper_quartile)}`
+                  : "—",
               ])}
-              dim={domains.map((row) => !row.judged)}
+              dim={domains.map((row) => !row.fitted)}
             />
           </section>
         )}
