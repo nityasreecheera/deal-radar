@@ -157,17 +157,9 @@ export default function AnalysisPage() {
               What each domain has found
             </h2>
             <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
-              Every set of criteria the radar is running, and what each one
-              decided. A domain with nothing next to it has been set up but has
-              not run yet.
-              <br />
-              <br />
-              Each domain judges a company for itself, so the same company can
-              be a fit for one and firmly not for another — Cornelis Networks
-              fits AI infra and is rejected by AI tools, because one is about
-              hardware and the other is not. That also means these rows count
-              judgements rather than companies, and a company examined by three
-              domains appears in three of them.
+              Each domain judges a company for itself, so these count
+              judgements rather than companies — one company seen by three
+              domains appears in three rows.
             </p>
 
             <Table
