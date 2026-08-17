@@ -222,12 +222,7 @@ export default function AnalysisPage() {
                       {line}
                     </span>
 
-                    <span
-                      className="h-[10px] shrink-0 bg-[var(--color-fits)]"
-                      style={{
-                        width: `${Math.max((160 * companies) / largest, 3)}px`,
-                      }}
-                    />
+                    <Bar fraction={companies / largest} />
 
                     <span className="tabular whitespace-nowrap text-[var(--color-ink-faint)]">
                       {companies}
@@ -403,6 +398,29 @@ function Figure({
 }
 
 /**
+ * A bar inside a track of its own.
+ *
+ * The track is fixed-width and cannot shrink; the fill is a percentage of the
+ * track. Sizing a bar as a percentage of a flex row does not work — a flex item
+ * is clamped to the space actually left over, so every value above roughly 60%
+ * rendered at exactly the same length. Three different numbers, three identical
+ * bars, and the chart quietly said they were equal.
+ */
+function Bar({ fraction }: { fraction: number }) {
+  return (
+    <span
+      className="block h-[10px] w-[220px] shrink-0 bg-[var(--color-rule)]"
+      aria-hidden
+    >
+      <span
+        className="block h-full bg-[var(--color-ink)]"
+        style={{ width: `${Math.max(fraction * 100, fraction > 0 ? 1.5 : 0)}%` }}
+      />
+    </span>
+  );
+}
+
+/**
  * Counts as bars. Proportional to the largest, not to the total — the question
  * is which is biggest, not what share each holds of a whole.
  */
@@ -417,20 +435,14 @@ function Bars({ data }: { data: Record<string, number> }) {
   }
 
   return (
-    <div className="max-w-xl space-y-2">
+    <div className="space-y-2">
       {entries.map(([label, count]) => (
         <div key={label} className="flex items-center gap-4 text-sm">
           <span className="w-44 shrink-0 text-[var(--color-ink-soft)]">
             {label}
           </span>
 
-          <span
-            className="h-[10px] bg-[var(--color-ink)]"
-            style={{
-              width: `${(100 * count) / largest}%`,
-              minWidth: count ? "2px" : 0,
-            }}
-          />
+          <Bar fraction={count / largest} />
 
           <span className="tabular text-[var(--color-ink-faint)]">{count}</span>
         </div>
