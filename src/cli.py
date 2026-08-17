@@ -95,7 +95,10 @@ def command_run(args: argparse.Namespace) -> int:
 
     digest = render_digest(run, thesis.name, contexts, clusters)
 
-    print(digest)
+    # Silent when another run is collecting this one — otherwise stdout carries
+    # every domain twice, once alone and once inside the combined message.
+    if not getattr(args, "_collected", False):
+        print(digest)
 
     # Everything below goes to stderr so stdout stays exactly the digest and can
     # be piped somewhere without the commentary.
@@ -163,6 +166,7 @@ def run_every_domain(args: argparse.Namespace) -> int:
         one.thesis = None
         one.send = False
         one._thesis_object = thesis
+        one._collected = True
 
         try:
             code = command_run(one)

@@ -156,3 +156,28 @@ def test_one_failing_domain_does_not_lose_the_others(radar, monkeypatch) -> None
 
 def test_running_all_domains_with_no_thesis_files_is_an_error(radar) -> None:
     assert cli.command_run(arguments(all_domains=True)) == 1
+
+
+def test_the_combined_message_contains_every_domain(radar, monkeypatch, capsys) -> None:
+    """
+    The rehearsal printed five domains individually and then a combined block
+    containing only one of them. The loop ran; the collecting did not.
+    """
+    for domain in ("Healthcare", "Energy", "Fintech"):
+        save_thesis(a_thesis(domain), directory=radar)
+
+    with_judge(
+        monkeypatch,
+        lambda f, e, t: Candidate(filing=f, verdict="fits", reason="Because."),
+    )
+
+    assert cli.command_run(arguments(all_domains=True)) == 0
+
+    printed = capsys.readouterr().out
+
+    # Exactly once each: the combined message carries them, and the
+    # per-domain runs no longer print separately. ">= 1" would have passed on
+    # the individual prints alone, which is how the first version of this test
+    # missed the bug it was written for.
+    for domain in ("Healthcare companies", "Energy companies", "Fintech companies"):
+        assert printed.count(domain) == 1, f"{domain} appears {printed.count(domain)}x"
