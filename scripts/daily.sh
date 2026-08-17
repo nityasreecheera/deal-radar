@@ -41,7 +41,9 @@ if [ ! -x "$PROJECT/.venv/bin/python" ]; then
   exit 1
 fi
 
-ARGS=(run)
+# Every thesis, one message. Without --all this runs config/thesis.yaml
+# alone, which is how four domains sat unscheduled while looking configured.
+ARGS=(run --all)
 
 if [ "${RADAR_SEND:-0}" = "1" ]; then
   ARGS+=(--send)

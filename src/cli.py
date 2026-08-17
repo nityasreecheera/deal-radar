@@ -23,17 +23,31 @@ from src.digest import render_digest, save_digest
 from src.edgar import fetch_filings
 from src.pipeline import default_window, run_radar
 from src.seen import connect, count_seen
-from src.thesis import ThesisError, load_thesis
+from src.thesis import ThesisError, load_all_theses, load_thesis
 
 
 def command_run(args: argparse.Namespace) -> int:
-    """Run the radar and print the digest."""
-    try:
-        thesis = load_thesis(Path(args.thesis) if args.thesis else None)
-    except ThesisError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    """
+    Run the radar and print the digest.
 
-        return 1
+    With --all, every thesis on disk runs and the digests are joined into one
+    message. Five separate emails each morning, four of them usually saying
+    nothing happened, is how a daily habit stops being one.
+    """
+    if getattr(args, "all_domains", False):
+        return run_every_domain(args)
+
+    preloaded = getattr(args, "_thesis_object", None)
+
+    if preloaded is not None:
+        thesis = preloaded
+    else:
+        try:
+            thesis = load_thesis(Path(args.thesis) if args.thesis else None)
+        except ThesisError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+
+            return 1
 
     if args.start and args.end:
         start, end = args.start, args.end
@@ -98,6 +112,8 @@ def command_run(args: argparse.Namespace) -> int:
 
         return 0
 
+    args._digest = digest
+
     path = save_digest(digest, run)
     print(f"saved {path}", file=sys.stderr)
 
@@ -114,6 +130,74 @@ def command_run(args: argparse.Namespace) -> int:
             return 1
 
     return 0
+
+
+def run_every_domain(args: argparse.Namespace) -> int:
+    """
+    Run each thesis in turn and send one message covering all of them.
+
+    A domain that found nothing still contributes its counts, because "nothing
+    new in Energy" is information — it is only noise when it arrives as its own
+    email. The sections are ordered by what each found, so the mornings when
+    something happened read as if they did.
+    """
+    theses = load_all_theses()
+
+    if not theses:
+        print("error: no thesis files in config/", file=sys.stderr)
+
+        return 1
+
+    sections: list[tuple[int, str]] = []
+    failed = 0
+
+    for thesis in theses:
+        print(f"— {thesis.domain} —", file=sys.stderr)
+
+        one = argparse.Namespace(**vars(args))
+        one.all_domains = False
+        one.thesis = None
+        one.send = False
+        one._thesis_object = thesis
+
+        try:
+            code = command_run(one)
+        except Exception as exc:  # noqa: BLE001 - one domain must not stop the rest
+            print(f"  {thesis.domain} failed: {exc}", file=sys.stderr)
+            failed += 1
+            continue
+
+        if code != 0:
+            failed += 1
+            continue
+
+        digest = getattr(one, "_digest", "")
+
+        if digest:
+            # Ordered by what was found, so a morning with something in it does
+            # not open with four quiet domains.
+            found = digest.count("\n1. ")
+            sections.append((found, digest))
+
+    if not sections:
+        return 1
+
+    sections.sort(key=lambda item: -item[0])
+    combined = "\n\n".join(text.rstrip() for _, text in sections) + "\n"
+
+    print(combined)
+
+    if args.send:
+        total = sum(count for count, _ in sections)
+        subject = f"Deal Radar · {total} new across {len(sections)} domains"
+
+        sent, message = deliver(combined, subject=subject, prefer_slack=args.slack)
+        print(message, file=sys.stderr)
+
+        if not sent:
+            return 1
+
+    return 1 if failed and not sections else 0
 
 
 def command_status(args: argparse.Namespace) -> int:
@@ -249,6 +333,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--thesis", help="path to a thesis file")
     run_parser.add_argument("--db", help="path to the seen-index")
+    run_parser.add_argument(
+        "--all",
+        dest="all_domains",
+        action="store_true",
+        help="run every thesis in config/ and send one message covering all",
+    )
     run_parser.add_argument(
         "--send",
         action="store_true",

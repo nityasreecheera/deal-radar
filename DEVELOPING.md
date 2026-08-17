@@ -183,6 +183,25 @@ windows cost nothing except a line telling you what got skipped.
 
 ### On a schedule
 
+Two failures worth knowing about, because both were silent.
+
+**`daily.sh` ran one thesis.** `src.cli run` with no `--thesis` loads
+`config/thesis.yaml`, so four domains sat unscheduled for days while looking
+perfectly configured on the criteria page. It now runs `--all`, which walks every
+thesis and sends one message covering them — five separate emails a morning, four
+usually saying nothing happened, is how a daily habit stops being one.
+
+**The execute bit was never in git.** It had been set by hand on the VM, and a
+`tar` deploy replaced the file with the 644 copy from the repository. Cron then
+failed with "Permission denied" every weekday for four days, logging nothing to
+the radar's own log because the script never started. Two fixes: the mode is now
+recorded in git (`git update-index --chmod=+x`), and cron invokes
+`/bin/bash daily.sh` so the bit is no longer load-bearing.
+
+The lesson generalises — a scheduled job that fails before it starts cannot report
+its own failure, so it needs checking from outside. `journalctl | grep CROND` is
+where that evidence lives.
+
 ```
 MAILTO=""
 RADAR_SEND=1
