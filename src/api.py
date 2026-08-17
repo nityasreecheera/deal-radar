@@ -435,6 +435,11 @@ class Analysis(BaseModel):
     judged: int = 0
     domains: list[DomainRow] = Field(default_factory=list)
     market: Market = Field(default_factory=Market)
+
+    # The companies one domain accepted, named. Only populated when a domain is
+    # selected: across all of them it would be a list of 45 with no shape, and
+    # the point of picking a domain is to see what is actually in it.
+    shortlist: list[StoredCandidate] = Field(default_factory=list)
     categories: list[CategoryRow] = Field(default_factory=list)
     sources: list[SourceRow] = Field(default_factory=list)
     round_age: dict[str, int] = Field(default_factory=dict)
@@ -581,8 +586,19 @@ def get_analysis(theme: str | None = None) -> Analysis:
         except ThesisError:
             configured = []
 
+        shortlist = (
+            list_candidates(connection, verdicts=["fits"], theme=theme)
+            if theme
+            else []
+        )
+
         return Analysis(
             judged=judged,
+            shortlist=sorted(
+                shortlist,
+                key=lambda c: (c.offering_amount or 0),
+                reverse=True,
+            ),
             domains=[
                 DomainRow(**tally.model_dump())
                 for tally in domain_tallies(connection, configured)

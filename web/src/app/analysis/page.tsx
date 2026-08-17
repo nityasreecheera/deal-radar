@@ -97,6 +97,7 @@ export default function AnalysisPage() {
   // Typed rather than `?? {}`: an empty object literal widens to `{}` and
   // every field below it becomes an error.
   const domains = data.domains ?? [];
+  const shortlist = data.shortlist ?? [];
   const market: Market = data.market ?? { companies: 0, excluded: 0 };
   const sizes: DealSizes = market.deal_sizes ?? { count: 0 };
   const ages = market.company_age ?? {};
@@ -151,7 +152,7 @@ export default function AnalysisPage() {
       <main className="mx-auto w-full max-w-4xl flex-1 space-y-12 px-8 py-10">
         {/* Every domain at a glance. First, because "what am I even covering"
             comes before any number about one of them. */}
-        {domains.length > 1 && (
+        {domains.length > 1 && !domain && (
           <section>
             <h2 className="font-display mb-1 text-[1.125rem]">
               Where the companies are
@@ -179,6 +180,42 @@ export default function AnalysisPage() {
             />
           </section>
         )}
+        {domain && shortlist.length > 0 && (
+          <section>
+            <h2 className="font-display mb-1 text-[1.125rem]">
+              Everything {domain} has found
+            </h2>
+            <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+              The {shortlist.length} companies these criteria accepted, largest
+              first. This is the whole list — if any of them look wrong, the
+              criteria are what to change.
+            </p>
+
+            <ul className="divide-y divide-[var(--color-rule)] border-t border-[var(--color-rule)]">
+              {shortlist.map((company) => (
+                <li key={company.accession}>
+                  <Link
+                    href={`/company/${encodeURIComponent(company.accession)}`}
+                    className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3 transition-colors hover:bg-[var(--color-paper-raised)]"
+                  >
+                    <span className="tabular w-20 shrink-0 text-sm text-[var(--color-ink-soft)]">
+                      {money(company.offering_amount)}
+                    </span>
+
+                    <span className="font-display min-w-0 flex-1 text-[0.9375rem]">
+                      {company.company_name}
+                    </span>
+
+                    <span className="text-[0.8125rem] text-[var(--color-ink-faint)]">
+                      {company.category ?? "uncategorised"}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {/* The market, not the machine. What an analyst came here for. */}
         <section>
           <h2 className="font-display mb-1 text-[1.125rem]">
