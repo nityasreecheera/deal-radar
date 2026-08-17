@@ -154,7 +154,15 @@ export default function CompanyPage({
             {candidate.theme && (
               <>
                 <span className="text-[var(--color-rule)]">·</span>
-                <span>{candidate.theme}</span>
+                {/* A chip rather than another dotted fact. The domain is not
+                    a property of the company like its size or address — it is
+                    which set of criteria produced the verdict beside it, and
+                    it should look like a different kind of thing. Neutral ink
+                    on purpose: the verdict colours next to it are meaningful,
+                    and a second colour here would compete with them. */}
+                <span className="rounded-full border border-[var(--color-rule)] bg-[var(--color-paper-raised)] px-2 py-0.5 text-[0.75rem] font-medium text-[var(--color-ink)]">
+                  {candidate.theme}
+                </span>
               </>
             )}
           </p>
