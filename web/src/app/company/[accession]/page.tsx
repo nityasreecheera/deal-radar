@@ -43,13 +43,24 @@ export default function CompanyPage({
 
   const backTo = from ? `/?${decodeURIComponent(from)}` : "/";
 
+  // The domain is already in the filters the list handed over. A verdict
+  // belongs to a thesis, not to a company, so a page opened from a
+  // domain-filtered list has to ask that domain — otherwise it shows whichever
+  // thesis happened to run last, which for a company judged differently by two
+  // of them is simply the wrong answer.
+  const domain = from
+    ? new URLSearchParams(decodeURIComponent(from)).get("theme")
+    : null;
+
+  const forDomain = domain ? `?theme=${encodeURIComponent(domain)}` : "";
+
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
         const response = await fetch(
-          `/api/candidates/${encodeURIComponent(accession)}`,
+          `/api/candidates/${encodeURIComponent(accession)}${forDomain}`,
           { cache: "no-store" },
         );
 
@@ -58,7 +69,7 @@ export default function CompanyPage({
         if (!cancelled) setCandidate((await response.json()) as Candidate);
 
         const extra = await fetch(
-          `/api/candidates/${encodeURIComponent(accession)}/detail`,
+          `/api/candidates/${encodeURIComponent(accession)}/detail${forDomain}`,
           { cache: "no-store" },
         );
 
@@ -82,7 +93,7 @@ export default function CompanyPage({
     return () => {
       cancelled = true;
     };
-  }, [accession]);
+  }, [accession, forDomain]);
 
   if (missing) {
     return (
@@ -139,6 +150,12 @@ export default function CompanyPage({
             </span>
             {isOverridden(candidate) && (
               <span className="text-[var(--color-ink-soft)]">(your call)</span>
+            )}
+            {candidate.theme && (
+              <>
+                <span className="text-[var(--color-rule)]">·</span>
+                <span>judged by {candidate.theme}</span>
+              </>
             )}
           </p>
         </div>

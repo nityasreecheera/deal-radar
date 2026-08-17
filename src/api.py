@@ -292,10 +292,18 @@ def get_candidates(
     response_model=StoredCandidate,
     responses={404: {"model": ErrorBody}},
 )
-def get_one(accession: str) -> StoredCandidate:
-    """One judgement."""
+def get_one(accession: str, theme: str | None = None) -> StoredCandidate:
+    """
+    One judgement, from a particular domain if one is named.
+
+    A company can carry a different verdict from each thesis — Cornelis Networks
+    fits AI infra and is rejected by AI tools — so a page reached from a
+    domain-filtered list has to ask for that domain's answer. Without it the
+    most recent judgement is returned, which is whichever thesis happened to run
+    last.
+    """
     with closing(connect()) as connection:
-        found = get_candidate(connection, accession)
+        found = get_candidate(connection, accession, theme=theme)
 
     if found is None:
         raise HTTPException(
@@ -311,10 +319,15 @@ def get_one(accession: str) -> StoredCandidate:
     response_model=CompanyDetail,
     responses={404: {"model": ErrorBody}},
 )
-def get_detail(accession: str) -> CompanyDetail:
-    """One company, with its history and connections."""
+def get_detail(accession: str, theme: str | None = None) -> CompanyDetail:
+    """
+    One company, with its history and connections.
+
+    Takes the domain for the same reason as get_one: the verdict and the
+    reasoning belong to a thesis, not to the company.
+    """
     with closing(connect()) as connection:
-        found = get_candidate(connection, accession)
+        found = get_candidate(connection, accession, theme=theme)
 
         if found is None:
             raise HTTPException(
