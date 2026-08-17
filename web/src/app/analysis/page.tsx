@@ -165,20 +165,36 @@ export default function AnalysisPage() {
 
             <Table
               head={["domain", "worth reading", "typical raise", "range"]}
-              rows={domains.map((row) => [
-                row.domain,
-                row.fitted
-                  ? String(row.fitted)
-                  : row.judged
-                    ? "none yet"
-                    : "not run yet",
-                money(row.typical_raise),
-                row.lower_quartile
-                  ? `${money(row.lower_quartile)} – ${money(row.upper_quartile)}`
-                  : "—",
-              ])}
+              keys={domains.map((row) => row.domain)}
+              rows={domains.map((row) =>
+                [
+                  row.domain,
+                  row.fitted ? (
+                    <Link
+                      key="n"
+                      href={`/?theme=${encodeURIComponent(row.domain)}&verdict=fits`}
+                      className="underline decoration-[var(--color-rule)] underline-offset-4 transition-colors hover:decoration-[var(--color-ink)]"
+                    >
+                      {row.fitted}
+                    </Link>
+                  ) : row.judged ? (
+                    "none yet"
+                  ) : (
+                    "not run yet"
+                  ),
+                  money(row.typical_raise),
+                  row.lower_quartile
+                    ? `${money(row.lower_quartile)} – ${money(row.upper_quartile)}`
+                    : "—",
+                ] as React.ReactNode[],
+              )}
               dim={domains.map((row) => !row.fitted)}
             />
+
+            <p className="mt-3 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+              The counts are links — they open that domain&apos;s companies in
+              the list, already filtered.
+            </p>
           </section>
         )}
         {domain && subdomains.length > 0 && (
@@ -454,10 +470,12 @@ function Bars({ data }: { data: Record<string, number> }) {
 function Table({
   head,
   rows,
+  keys,
   dim = [],
 }: {
   head: string[];
-  rows: string[][];
+  rows: React.ReactNode[][];
+  keys: string[];
   dim?: boolean[];
 }) {
   return (
@@ -481,7 +499,7 @@ function Table({
         <tbody>
           {rows.map((row, rowIndex) => (
             <tr
-              key={row[0]}
+              key={keys[rowIndex]}
               className={`border-b border-[var(--color-rule)] ${
                 // A row that has never produced a fit is the thing you might
                 // switch off, so it recedes rather than shouts.
