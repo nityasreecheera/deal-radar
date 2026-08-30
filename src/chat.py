@@ -21,6 +21,7 @@ from typing import Callable
 import httpx
 from pydantic import BaseModel, Field
 
+from src.judge import llm_api_key
 from src.candidates import StoredCandidate, list_candidates
 
 
@@ -80,11 +81,12 @@ def create_chat_client(
 
     load_dotenv(PROJECT_ROOT / ".env")
 
-    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("LLM_API_KEY")
+    api_key = llm_api_key()
 
     if not api_key:
         raise ChatError(
-            "No LLM key found. Set OPENROUTER_API_KEY (or LLM_API_KEY) in .env"
+            "No LLM key found. Set LLM_API_KEY in .env, along with "
+            "LLM_BASE_URL and LLM_MODEL for whichever provider you use."
         )
 
     endpoint = (base_url or DEFAULT_BASE_URL).rstrip("/")

@@ -32,6 +32,24 @@ DEFAULT_BASE_URL = os.getenv(
 )
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "anthropic/claude-sonnet-4.5")
 
+
+def llm_api_key() -> str | None:
+    """
+    The key for whichever provider is configured.
+
+    LLM_API_KEY first, because it is the one that means "whatever I have
+    pointed LLM_BASE_URL at". The provider-specific names are conveniences, and
+    they are a trap when two are set: a leftover OPENROUTER_API_KEY sitting in
+    .env after switching to OpenAI sends the wrong key to the right URL and
+    fails as a 401 that looks like a bad key rather than the wrong one.
+    """
+    return (
+        os.getenv("LLM_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("OPENROUTER_API_KEY")
+    )
+
 SYSTEM_PROMPT = """\
 You screen companies against an investment thesis for an analyst.
 
@@ -120,11 +138,12 @@ def create_openai_compatible_judge(
 
     load_dotenv(PROJECT_ROOT / ".env")
 
-    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("LLM_API_KEY")
+    api_key = llm_api_key()
 
     if not api_key:
         raise JudgementError(
-            "No LLM key found. Set OPENROUTER_API_KEY (or LLM_API_KEY) in .env"
+            "No LLM key found. Set LLM_API_KEY in .env, along with "
+            "LLM_BASE_URL and LLM_MODEL for whichever provider you use."
         )
 
     endpoint = (base_url or DEFAULT_BASE_URL).rstrip("/")

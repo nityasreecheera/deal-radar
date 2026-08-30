@@ -235,3 +235,40 @@ def test_a_missing_summary_is_allowed() -> None:
     )
 
     assert judgement.summary is None
+
+
+def test_the_configured_key_wins_over_a_leftover_one(monkeypatch) -> None:
+    """
+    Switching provider without clearing the old key is the obvious mistake, and
+    it fails as a 401 that reads like a bad key rather than the wrong one.
+    """
+    from src.judge import llm_api_key
+
+    monkeypatch.setenv("LLM_API_KEY", "the-one-i-meant")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "an-old-one-still-in-dotenv")
+
+    assert llm_api_key() == "the-one-i-meant"
+
+
+def test_a_provider_specific_key_still_works_alone(monkeypatch) -> None:
+    from src.judge import llm_api_key
+
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-whatever")
+
+    assert llm_api_key() == "sk-whatever"
+
+
+def test_no_key_anywhere_is_none(monkeypatch) -> None:
+    from src.judge import llm_api_key
+
+    for name in (
+        "LLM_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    assert llm_api_key() is None
