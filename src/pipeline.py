@@ -49,6 +49,11 @@ class RadarRun(BaseModel):
     # Industry groups EDGAR could not be asked about at all. Empty on a
     # healthy run. When it isn't, "nothing new" is not a finding.
     unsearched: list[str] = Field(default_factory=list)
+
+    # Companies fetched and filtered but never judged, because the lookup or
+    # the model failed. Same principle as `unsearched`: a morning where nothing
+    # could be examined must not read like one where nothing was worth showing.
+    unexamined: int = 0
     searched_count: int = 0
 
     @property
@@ -206,6 +211,7 @@ def run_radar(
         already_seen=already_seen,
         candidates=candidates,
         problems=problems,
+        unexamined=len(fresh) - len(candidates),
         unsearched=list(found.unsearched),
         searched_count=len(found.searched),
     )

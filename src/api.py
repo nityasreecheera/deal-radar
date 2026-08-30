@@ -37,6 +37,7 @@ from src.candidates import (
     mark_viewed,
     domain_tallies,
     market_view,
+    load_researchers,
     quarter_start,
     record_decision,
     subdomain_counts,
@@ -53,6 +54,7 @@ from src.funding import (
 )
 from src.contact import gmail_compose_url, gmail_search_url
 from src.models import FitVerdict
+from src.research import Researcher
 from src.signals import Assessment, assess
 from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
@@ -143,8 +145,13 @@ class CompanyDetail(BaseModel):
     category: str | None = None
     category_note: str = ""
 
-    # What the filings support, scored. Never a prediction — see src/signals.
+    # What the filings support. Never a prediction — see src/signals.
     assessment: Assessment = Field(default_factory=Assessment)
+
+    # Published work belonging to people named on the filing, where a plausible
+    # match was found. Shown with the field and institution so a reader can
+    # judge it — never asserted as identity.
+    researchers: list[Researcher] = Field(default_factory=list)
 
     # Links, not integrations. Compose opens Gmail with the address filled in;
     # search opens Gmail looking for anything already exchanged with the
@@ -358,7 +365,11 @@ def get_detail(accession: str, theme: str | None = None) -> CompanyDetail:
 
             domain = registrable_domain(found.website) or None
 
+        # Attached before scoring: the signal reads them off the candidate.
+        found.researchers = load_researchers(connection, accession)
+
         return CompanyDetail(
+            researchers=found.researchers,
             assessment=assess(found, history),
             compose_url=(
                 gmail_compose_url(

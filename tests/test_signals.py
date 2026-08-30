@@ -47,13 +47,20 @@ def fired(assessment) -> set[str]:
     return {s.name for s in assessment.fired}
 
 
-def test_a_company_with_nothing_on_file_shows_little() -> None:
+def test_a_company_with_nothing_on_file_says_nothing() -> None:
+    """
+    A filing with no amounts, no investors, no incorporation year and no
+    history supports no statements at all — so none are made.
+
+    An earlier version always produced at least "findable online", which fired
+    on three quarters of everything and told nobody anything. A list of
+    failures about a company nobody could look up is worse than an empty panel,
+    which the interface hides.
+    """
     result = assess(company(), today="2026-08-20")
 
-    # Only what can be checked appears at all, so a bare filing produces a short
-    # list rather than a long one of failures.
-    assert result.signals
-    assert len(result.fired) <= 1
+    assert result.signals == []
+    assert "Nothing checkable" in result.describe()
 
 
 def test_a_sold_out_round_counts_as_demand() -> None:

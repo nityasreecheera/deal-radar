@@ -147,6 +147,15 @@ def render_digest(
                 f"{len(run.unsearched) + run.searched_count} categories "
                 "could not be reached, so this is not a clear day."
             )
+        elif run.unexamined:
+            # Fetched, filtered, and then nothing could be looked up or judged.
+            # Reporting that as "nothing matched" claims a conclusion the run
+            # never reached.
+            lines.append(
+                f"{run.unexamined} new companies were found but none could be "
+                "examined — the lookup or the model failed on every one. "
+                "This is not a quiet day; nothing was actually judged."
+            )
         else:
             lines.append("Nothing new matched the thesis.")
     else:

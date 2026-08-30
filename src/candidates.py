@@ -68,6 +68,10 @@ class StoredCandidate(BaseModel):
     contact_email: str | None = None
     outreach_status: str | None = None
     outreach_at: str | None = None
+
+    # Attached at read time, not stored on this row. Excluded from the API
+    # schema of the candidate itself — the detail endpoint sends them once.
+    researchers: list = Field(default_factory=list, exclude=True)
     jurisdiction: str | None = None
     entity_type: str | None = None
     cik: str | None = None
@@ -1380,4 +1384,74 @@ def subdomain_counts(
             "typical": typical(grouped.get(line, [])),
         }
         for line, count in sorted(counts.items(), key=lambda item: -item[1])
+    ]
+
+
+def save_researchers(
+    connection: sqlite3.Connection,
+    accession: str,
+    person_name: str,
+    researcher,
+    checked_at: str | None = None,
+) -> None:
+    """
+    Store what was found for one person at one company, match or not.
+
+    A miss is recorded too. Without it every run re-searches the same names
+    against a service that asks politely to be left alone.
+    """
+    connection.execute(
+        """
+        INSERT INTO researcher (
+            accession, person_name, openalex_id, display_name, works,
+            citations, institution, topics, plausible, checked_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (accession, person_name) DO UPDATE SET
+            openalex_id  = excluded.openalex_id,
+            display_name = excluded.display_name,
+            works        = excluded.works,
+            citations    = excluded.citations,
+            institution  = excluded.institution,
+            topics       = excluded.topics,
+            plausible    = excluded.plausible,
+            checked_at   = excluded.checked_at
+        """,
+        (
+            accession,
+            person_name,
+            getattr(researcher, "openalex_id", "") if researcher else "",
+            getattr(researcher, "name", "") if researcher else "",
+            getattr(researcher, "works", 0) if researcher else 0,
+            getattr(researcher, "citations", 0) if researcher else 0,
+            getattr(researcher, "institution", "") if researcher else "",
+            json.dumps(getattr(researcher, "topics", []) if researcher else []),
+            1 if (researcher and getattr(researcher, "plausible", False)) else 0,
+            checked_at or datetime.now(UTC).isoformat(),
+        ),
+    )
+    connection.commit()
+
+
+def load_researchers(connection: sqlite3.Connection, accession: str) -> list:
+    """Research records found for the people on one filing."""
+    from src.research import Researcher
+
+    rows = connection.execute(
+        "SELECT * FROM researcher WHERE accession = ? AND display_name != '' "
+        "ORDER BY works DESC",
+        (accession,),
+    ).fetchall()
+
+    return [
+        Researcher(
+            name=row["display_name"],
+            openalex_id=row["openalex_id"] or "",
+            works=row["works"] or 0,
+            citations=row["citations"] or 0,
+            institution=row["institution"] or "",
+            topics=json.loads(row["topics"] or "[]"),
+            plausible=bool(row["plausible"]),
+        )
+        for row in rows
     ]

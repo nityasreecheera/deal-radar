@@ -34,6 +34,25 @@ CREATE TABLE IF NOT EXISTS seen_company (
     accession        TEXT
 );
 
+-- Research records belonging to people named on filings.
+--
+-- Kept per company, not per person: whether a nuclear physicist is plausibly the
+-- founder depends on what the company does, so the same name can be a match at
+-- one company and a namesake at another.
+CREATE TABLE IF NOT EXISTS researcher (
+    accession    TEXT NOT NULL,
+    person_name  TEXT NOT NULL,
+    openalex_id  TEXT,
+    display_name TEXT,
+    works        INTEGER,
+    citations    INTEGER,
+    institution  TEXT,
+    topics       TEXT,
+    plausible    INTEGER NOT NULL DEFAULT 0,
+    checked_at   TEXT NOT NULL,
+    PRIMARY KEY (accession, person_name)
+);
+
 -- Which domains have already been offered a company.
 --
 -- seen_company answers "have we ever encountered this?" and is global, which is

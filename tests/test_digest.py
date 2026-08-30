@@ -283,3 +283,26 @@ def test_the_footer_reaches_the_email() -> None:
     assert "16 drug development" in content
     # With the other counting lines, not attached to a company.
     assert content.index("16 drug development") > content.index("Acme Health")
+
+
+def test_a_run_that_judged_nothing_does_not_read_as_a_quiet_day() -> None:
+    """
+    Both paid services ran out on the same afternoon — Tavily's quota and
+    OpenRouter's credit. The radar fetched and filtered normally and then failed
+    on every company, which would have reported as "nothing new matched the
+    thesis": a conclusion the run never reached.
+    """
+    content = render_digest(
+        run(candidates=[], unexamined=14), "Healthcare AI"
+    )
+
+    assert "Nothing new matched the thesis." not in content
+    assert "none could be examined" in content
+    assert "14 new companies" in content
+
+
+def test_a_genuinely_quiet_day_is_still_reported_plainly() -> None:
+    content = render_digest(run(candidates=[]), "Healthcare AI")
+
+    assert "Nothing new matched the thesis." in content
+    assert "could be examined" not in content

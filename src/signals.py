@@ -159,16 +159,33 @@ def assess(candidate, history=None, today: str | None = None) -> Assessment:
             )
         )
 
-    # --- what we could find out ---------------------------------------------
-    signals.append(
-        Signal(
-            name="Findable online",
-            weight=1,
-            fired=bool(candidate.website),
-            means="there is something to check; silence is not evidence",
-            detail=candidate.website or "no website found",
+    # --- who is behind it ----------------------------------------------------
+    #
+    # Replaces a "findable online" check, which fired on three quarters of
+    # everything and told nobody anything. For a company with no product yet,
+    # the founders' published work is sometimes the only evidence there is.
+    researchers = getattr(candidate, "researchers", None) or []
+    confirmed = [r for r in researchers if getattr(r, "plausible", False)]
+
+    if researchers:
+        best = max(confirmed or researchers, key=lambda r: r.works)
+
+        signals.append(
+            Signal(
+                name="Founder with a research record",
+                weight=3,
+                fired=bool(confirmed),
+                means=(
+                    "published work in the field they are building in, which is "
+                    "hard to acquire and hard to fake"
+                ),
+                detail=(
+                    f"{best.name}: {best.summary}"
+                    if confirmed
+                    else "no record in a related field"
+                ),
+            )
         )
-    )
 
     # --- across filings, the strongest signals available ---------------------
     if history is not None and history.rounds:
