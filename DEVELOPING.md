@@ -449,6 +449,13 @@ none: not one company on record has been acquired, failed, or floated. A number
 claiming "73% likely to succeed" would be invented and would look exactly as
 confident as a real one.
 
+The interface shows the literal points, not a rescaled ten. Rescaling gave a
+number with neither a real numerator nor a real denominator — "5 out of 10" was 5
+of nothing anyone could point at, because the weights are invisible and the total
+available varies with what is knowable about the company. `out_of_ten` still
+exists on the model for anything that wants one number; the panel does not use
+it.
+
 Two properties keep it honest. Every signal is shown whether or not it fired,
 with the figure behind it, so a score can always be taken apart. And a company
 with no funding history is scored out of a smaller total rather than penalised

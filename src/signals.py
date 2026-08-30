@@ -125,7 +125,10 @@ def assess(candidate, history=None, today: str | None = None) -> Assessment:
                 weight=1,
                 fired=candidate.investor_count >= 10,
                 means="a syndicate rather than one cheque",
-                detail=f"{candidate.investor_count} investors",
+                detail=(
+                    f"{candidate.investor_count} investor"
+                    + ("" if candidate.investor_count == 1 else "s")
+                ),
             )
         )
 
@@ -150,7 +153,11 @@ def assess(candidate, history=None, today: str | None = None) -> Assessment:
                 weight=2,
                 fired=age <= 30,
                 means="opened recently, so there may be room left",
-                detail=f"open {age} days when filed",
+                detail=(
+                    f"opened {age} days before filing"
+                    if age
+                    else "opened the day it filed"
+                ),
             )
         )
 
@@ -186,7 +193,11 @@ def assess(candidate, history=None, today: str | None = None) -> Assessment:
                 weight=1,
                 fired=len(real) > 1,
                 means="somebody funded them once already",
-                detail=f"{len(real)} raises on record",
+                detail=(
+                    "first raise on record"
+                    if len(real) == 1
+                    else f"{len(real)} raises on record"
+                ),
             )
         )
 
