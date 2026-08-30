@@ -1,9 +1,10 @@
 """
-Scoring what the filings show.
+What the filings say is true of a company, and what they say is not.
 
-The rule underneath all of it: the number describes evidence, never an outcome.
-A company scoring 8 is one we know more good things about than a company scoring
-3 — not one more likely to succeed. Nothing here has outcomes to learn from.
+Two rules underneath all of it. Nothing here predicts an outcome — there are no
+outcomes on record to learn from. And nothing is totalled, because any weighting
+of "raised before" against "ten investors" is invented here rather than read off
+a filing.
 """
 
 from src.candidates import StoredCandidate
@@ -46,13 +47,13 @@ def fired(assessment) -> set[str]:
     return {s.name for s in assessment.fired}
 
 
-def test_a_company_with_nothing_on_file_scores_low() -> None:
+def test_a_company_with_nothing_on_file_shows_little() -> None:
     result = assess(company(), today="2026-08-20")
 
-    # Only the signals that can be checked at all are counted, so a bare filing
-    # is a low score rather than a divide by zero.
-    assert result.possible > 0
-    assert result.out_of_ten <= 2
+    # Only what can be checked appears at all, so a bare filing produces a short
+    # list rather than a long one of failures.
+    assert result.signals
+    assert len(result.fired) <= 1
 
 
 def test_a_sold_out_round_counts_as_demand() -> None:
@@ -75,7 +76,7 @@ def test_a_barely_started_round_does_not() -> None:
     assert any(s.name == "Round nearly or fully sold" for s in result.signals)
 
 
-def test_raising_more_than_last_time_is_the_heaviest_signal() -> None:
+def test_raising_more_than_last_time_leads_the_list() -> None:
     result = assess(
         company(),
         history=history(("2024-01-10", 2_000_000, False), ("2026-08-20", 9_000_000, False)),
@@ -85,7 +86,9 @@ def test_raising_more_than_last_time_is_the_heaviest_signal() -> None:
     growth = next(s for s in result.signals if s.name == "Raising more than last time")
 
     assert growth.fired
-    assert growth.weight == max(s.weight for s in result.signals)
+    # Weight orders the list rather than adding to a total, so the signal that
+    # carries the most sits first.
+    assert result.signals[0].name == "Raising more than last time"
 
 
 def test_a_smaller_round_than_last_time_does_not_fire() -> None:
@@ -98,15 +101,16 @@ def test_a_smaller_round_than_last_time_does_not_fire() -> None:
     assert "Raising more than last time" not in fired(result)
 
 
-def test_a_company_with_no_history_is_scored_out_of_less() -> None:
-    # Not penalised for a history nobody has. The cross-filing signals are
-    # simply absent from both sides of the fraction.
+def test_a_company_with_no_history_is_asked_fewer_questions() -> None:
+    # Not penalised for a history nobody has: the cross-filing signals are
+    # absent from the list entirely rather than listed as failures.
     without = assess(company(), today="2026-08-20")
     with_one = assess(
         company(), history=history(("2026-08-20", 2_000_000, False)), today="2026-08-20"
     )
 
-    assert with_one.possible > without.possible
+    assert len(with_one.signals) > len(without.signals)
+    assert "Has raised before" not in {s.name for s in without.signals}
 
 
 def test_an_oversubscribed_round_is_recognised() -> None:
@@ -121,7 +125,7 @@ def test_an_oversubscribed_round_is_recognised() -> None:
     assert "Round grew after filing" in fired(result)
 
 
-def test_the_score_is_out_of_ten_however_many_signals_there_are() -> None:
+def test_a_company_with_everything_has_nothing_in_the_second_list() -> None:
     everything = assess(
         company(
             offering_amount=2_000_000,
@@ -136,19 +140,19 @@ def test_the_score_is_out_of_ten_however_many_signals_there_are() -> None:
         today="2026-08-20",
     )
 
-    assert everything.out_of_ten == 10
-    assert everything.points == everything.possible
+    assert everything.missing == []
+    assert len(everything.fired) == len(everything.signals)
 
 
-def test_every_point_is_traceable_to_a_signal() -> None:
+def test_every_signal_explains_itself() -> None:
     result = assess(
         company(offering_amount=1_000_000, amount_sold=900_000),
         today="2026-08-20",
     )
 
-    # A score nobody can take apart is an opinion wearing a number's clothes.
-    assert result.points == sum(s.weight for s in result.fired)
+    # A line nobody can check is an opinion wearing evidence's clothes.
     assert all(s.means for s in result.signals)
+    assert all(s.detail for s in result.signals)
 
 
 def test_a_malformed_date_does_not_crash_the_score() -> None:
@@ -161,9 +165,19 @@ def test_the_description_never_claims_a_prediction() -> None:
         company(offering_amount=1_000, amount_sold=1_000), today="2026-08-20"
     ).describe()
 
-    assert "evidence" in text
-    for forbidden in ("likely", "probability", "chance", "will succeed"):
+    assert "true" in text
+    for forbidden in ("likely", "probability", "chance", "score", "will succeed"):
         assert forbidden not in text.lower()
+
+
+def test_nothing_is_totalled() -> None:
+    # Any weighting of "raised before" against "ten investors" is invented here
+    # rather than read off a filing. Presenting one as a total would make an
+    # invisible judgement look like a measurement.
+    result = assess(company(offering_amount=1_000, amount_sold=1_000))
+
+    assert not hasattr(result, "points")
+    assert not hasattr(result, "out_of_ten")
 
 
 def test_growth_is_measured_against_the_amended_amount() -> None:

@@ -148,12 +148,12 @@ problem.
 
 ## What it deliberately won't do
 
-- **It won't tell you how likely a company is to succeed.** There is a score on
-  each company, but it counts evidence, not odds — how many of the checkable
-  things are true, out of the ones we could check. A probability would need
-  outcomes to calibrate against and this has none: no company on record has been
-  acquired, failed, or floated. Every point is listed with the figure behind it,
-  so a score you disagree with tells you exactly which line to argue with.
+- **It won't score a company.** Each one gets two lists — what the filings show
+  in its favour, and what they don't — with the figure behind every line. No
+  total, because totalling needs weights, and any weighting of "raised before"
+  against "ten investors" is invented rather than read off a filing. And no
+  probability: that needs outcomes to calibrate against, and no company on record
+  has been acquired, failed, or floated.
 - **It won't guess.** If the model returns something malformed, the run records a
   problem and moves on. It never invents a verdict, and it never marks that company
   as seen, so tomorrow tries again.

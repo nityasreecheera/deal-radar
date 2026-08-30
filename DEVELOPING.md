@@ -440,26 +440,27 @@ of styling goes through it.
 properties. A `@property` isn't serialised and would never reach the browser, which
 has already cost time twice on this project.
 
-### The evidence score is not a prediction
+### Signals are listed, never totalled
 
-`src/signals.py` scores a company out of ten. It counts signals present over
-signals checkable — nothing more. There is no model in it and no probability,
-because a probability needs outcomes to calibrate against and this project has
-none: not one company on record has been acquired, failed, or floated. A number
-claiming "73% likely to succeed" would be invented and would look exactly as
-confident as a real one.
+`src/signals.py` produces two lists: what the filings show in a company's favour
+and what they do not. No model, no probability, and — after a false start — no
+total.
 
-The interface shows the literal points, not a rescaled ten. Rescaling gave a
-number with neither a real numerator nor a real denominator — "5 out of 10" was 5
-of nothing anyone could point at, because the weights are invisible and the total
-available varies with what is knowable about the company. `out_of_ten` still
-exists on the model for anything that wants one number; the panel does not use
-it.
+The total went because it was the least defensible thing on the page. Summing
+signals needs weights, and any weighting of "raised before" against "ten
+investors" is a judgement invented in this file rather than read off a filing:
+invisible to whoever reads the number and impossible to argue with. It was also
+rescaled, so "5 out of 10" had neither a real numerator nor a real denominator.
+
+`Signal.weight` survives, and orders the list so what carries most sits first. It
+is never summed.
+
+No probability either, for a separate reason: that needs outcomes to calibrate
+against and not one company on record has been acquired, failed, or floated.
 
 Two properties keep it honest. Every signal is shown whether or not it fired,
-with the figure behind it, so a score can always be taken apart. And a company
-with no funding history is scored out of a smaller total rather than penalised
-for facts nobody has.
+with the figure behind it. And a company with no funding history is asked fewer
+questions rather than shown a list of failures for facts nobody has.
 
 The heaviest signal is a round bigger than the last one, which is the closest
 thing to market validation a filing carries. It compares against the **amended**

@@ -6,14 +6,13 @@ calibrate against, and this project has none — no company on record has been
 acquired, failed, or floated. A number claiming "73% likely to succeed" would be
 invented, and would look exactly as confident as a real one.
 
-What this measures is evidence: how many of the things worth knowing are
-present, out of the things we can actually check. A company scoring 8 is not more
-likely to succeed than one scoring 3. It is one we know more good things about,
-which is a smaller claim and a true one.
+What this produces is two lists: what the filings say is true of a company, and
+what they say is not. There is no total, because a total needs weights, and any
+weighting of "raised before" against "ten investors" is a judgement invented here
+rather than read off a filing — invisible to the reader and unarguable.
 
-Every point is traceable to a field on a filing, and the interface shows which
-signals fired and which did not — because a score nobody can take apart is an
-opinion wearing a number's clothes.
+The weights that remain only order the list, so the signals that carry the most
+sit at the top. Every line is traceable to a field on a filing.
 """
 
 from __future__ import annotations
@@ -27,7 +26,12 @@ class Signal(BaseModel):
     """One checkable thing, and what its presence suggests."""
 
     name: str
+
+    # Ordering only. How much this signal carries relative to the others, used
+    # to sort the list — never summed, because a total would present an
+    # invented weighting as a measurement.
     weight: int = Field(ge=1)
+
     fired: bool = False
 
     # What the reader learns from it. Shown next to the signal, because a
@@ -39,10 +43,8 @@ class Signal(BaseModel):
 
 
 class Assessment(BaseModel):
-    """Everything the filings support, added up."""
+    """What the filings say is true of a company, and what they say is not."""
 
-    points: int = 0
-    possible: int = 0
     signals: list[Signal] = Field(default_factory=list)
 
     @property
@@ -53,29 +55,14 @@ class Assessment(BaseModel):
     def missing(self) -> list[Signal]:
         return [s for s in self.signals if not s.fired]
 
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def out_of_ten(self) -> int:
-        """
-        Rounded to ten, because a score of 7/23 invites false precision.
-
-        A computed_field, not a plain property: a property is not serialised,
-        so it never reaches the browser. That has now cost time three times in
-        this project — is_unread, filing_url, and this.
-        """
-        if not self.possible:
-            return 0
-
-        return round(10 * self.points / self.possible)
-
     def describe(self) -> str:
-        """One line, honest about what the number is."""
-        if not self.possible:
+        """One line for a human."""
+        if not self.signals:
             return "Nothing checkable on this filing."
 
         return (
-            f"{self.out_of_ten} of 10 on evidence — "
-            f"{len(self.fired)} of {len(self.signals)} signals present."
+            f"{len(self.fired)} of {len(self.signals)} things we look for "
+            "are true."
         )
 
 
@@ -254,8 +241,7 @@ def assess(candidate, history=None, today: str | None = None) -> Assessment:
                 )
             )
 
+    # Heaviest first, so what carries the most sits at the top of each list.
     return Assessment(
-        points=sum(s.weight for s in signals if s.fired),
-        possible=sum(s.weight for s in signals),
-        signals=signals,
+        signals=sorted(signals, key=lambda s: -s.weight),
     )
