@@ -6,6 +6,7 @@ import { use, useEffect, useState } from "react";
 import { CompanyProfile } from "@/components/CompanyProfile";
 import { ContactPanel } from "@/components/ContactPanel";
 import { DecisionPanel } from "@/components/DecisionPanel";
+import { EvidencePanel } from "@/components/EvidencePanel";
 import {
   VERDICT_LABEL,
   effectiveVerdict,
@@ -190,6 +191,12 @@ export default function CompanyPage({
                 column, a top edge when it drops underneath. */}
             <div className="border-t border-[var(--color-rule)] pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
               <DecisionPanel candidate={candidate} onChange={setCandidate} />
+
+              {detail && (
+                <div className="mt-8">
+                  <EvidencePanel detail={detail} />
+                </div>
+              )}
 
               {detail && (
                 <div className="mt-8">

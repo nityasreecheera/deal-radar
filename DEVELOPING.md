@@ -440,6 +440,25 @@ of styling goes through it.
 properties. A `@property` isn't serialised and would never reach the browser, which
 has already cost time twice on this project.
 
+### The evidence score is not a prediction
+
+`src/signals.py` scores a company out of ten. It counts signals present over
+signals checkable — nothing more. There is no model in it and no probability,
+because a probability needs outcomes to calibrate against and this project has
+none: not one company on record has been acquired, failed, or floated. A number
+claiming "73% likely to succeed" would be invented and would look exactly as
+confident as a real one.
+
+Two properties keep it honest. Every signal is shown whether or not it fired,
+with the figure behind it, so a score can always be taken apart. And a company
+with no funding history is scored out of a smaller total rather than penalised
+for facts nobody has.
+
+The heaviest signal is a round bigger than the last one, which is the closest
+thing to market validation a filing carries. It compares against the **amended**
+amount: Cornelis Networks opened at $25m and amended to $245m against a previous
+$45m, and comparing the opening figure called that a down round.
+
 ### Sub-domains come from the criteria, not from a list
 
 `category` is a fixed global vocabulary and cannot divide a domain. It has seven
