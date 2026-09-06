@@ -324,6 +324,8 @@ def list_candidates(
     theme: str | None = None,
     unread_only: bool = False,
     query_text: str | None = None,
+    min_amount: int | None = None,
+    max_amount: int | None = None,
     limit: int | None = None,
 ) -> list[StoredCandidate]:
     """
@@ -365,6 +367,17 @@ def list_candidates(
 
     if unread_only:
         clauses.append("viewed_at IS NULL")
+
+    # An undisclosed raise is excluded by a size filter rather than treated as
+    # zero. "Under $1M" is a claim about the amount, and a filing that does not
+    # state one cannot satisfy it.
+    if min_amount is not None:
+        clauses.append("offering_amount >= ?")
+        parameters.append(min_amount)
+
+    if max_amount is not None:
+        clauses.append("offering_amount <= ?")
+        parameters.append(max_amount)
 
     # Every word must appear somewhere, but not all in the same field: "cooling
     # data centre" should find a company whose summary says cooling and whose

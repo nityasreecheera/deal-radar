@@ -47,6 +47,8 @@ function CandidateList() {
   const [loading, setLoading] = useState(true);
   const [unreachable, setUnreachable] = useState(false);
   const [reloads, setReloads] = useState(0);
+  const [reading, setReading] = useState<string[]>([]);
+  const [unsupported, setUnsupported] = useState<string[]>([]);
 
   const theme = params.get("theme") ?? "";
   const since = params.get("since") ?? "";
@@ -152,6 +154,8 @@ function CandidateList() {
           // Optional in the generated schema because the Pydantic field has a
           // default_factory, even though the API always sends it.
           setCandidates(body.candidates ?? []);
+          setReading(body.reading ?? []);
+          setUnsupported(body.unsupported ?? []);
           setUnreachable(false);
         }
       } catch {
@@ -263,7 +267,12 @@ function CandidateList() {
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-8">
         <section className="border-b border-[var(--color-rule)] pt-5">
-          <SearchBox value={search} onCommit={(q) => setFilters({ q: q || null })} />
+          <SearchBox
+            value={search}
+            reading={reading}
+            unsupported={unsupported}
+            onCommit={(q) => setFilters({ q: q || null })}
+          />
         </section>
 
         <section className="flex flex-wrap items-end gap-x-8 gap-y-4 border-b border-[var(--color-rule)] py-5">

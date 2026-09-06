@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from src.judge import llm_api_key
 from src.candidates import StoredCandidate, list_candidates
+from src.query import parse_query
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -175,6 +176,7 @@ def answer_question(
     theme: str | None = None,
     chat: ChatFunction | None = None,
     limit: int = MAX_CONTEXT_ROWS,
+    themes: list[str] | None = None,
 ) -> ChatAnswer:
     """
     Answer a question from stored judgements.
@@ -194,7 +196,34 @@ def answer_question(
             f"limit {MAX_QUESTION_LENGTH})"
         )
 
-    candidates = list_candidates(connection, theme=theme, limit=limit)
+    # Which rows the model sees is the whole answer. Handing it the newest 60
+    # meant "which pre-seed companies were a fit?" was answered from whatever
+    # happened to file last week — a confident answer drawn from the wrong
+    # sample. The question is read for filters first, and those select the rows.
+    parsed = parse_query(cleaned, themes)
+
+    def select(with_text: bool) -> list[StoredCandidate]:
+        return list_candidates(
+            connection,
+            theme=parsed.theme or theme,
+            verdicts=parsed.verdicts or None,
+            since=parsed.since,
+            min_amount=parsed.min_amount,
+            max_amount=parsed.max_amount,
+            query_text=parsed.text if with_text else None,
+            limit=limit,
+        )
+
+    candidates = select(with_text=bool(parsed.text))
+
+    # The leftover words are a guess at what matters, not part of the question.
+    # "Why did we pass on those?" leaves words no filing contains, and letting
+    # them empty the selection would hand the model nothing and produce "I have
+    # no record of that" for a question the database can answer. The structured
+    # filters are what the person actually said, so those hold; the words only
+    # narrow further when narrowing still leaves something.
+    if not candidates and parsed.text:
+        candidates = select(with_text=False)
 
     responder = chat or create_chat_client()
     reply = responder(SYSTEM_PROMPT, build_prompt(cleaned, candidates))

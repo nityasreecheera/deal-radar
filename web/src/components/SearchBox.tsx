@@ -19,9 +19,13 @@ const SETTLE_MS = 300;
  */
 export function SearchBox({
   value,
+  reading,
+  unsupported,
   onCommit,
 }: {
   value: string;
+  reading: string[];
+  unsupported: string[];
   onCommit: (query: string) => void;
 }) {
   const [text, setText] = useState(value);
@@ -57,11 +61,31 @@ export function SearchBox({
             if (event.key === "Enter") commit.current(text.trim());
             if (event.key === "Escape") setText("");
           }}
-          placeholder="Company, what they do, or why it was judged that way"
+          placeholder="Try: pre-seed AI infra companies under $1M about cooling"
           aria-label="Search judged companies"
           className="field w-full"
         />
       </label>
+
+      {/* What the sentence was taken to mean. Shown whenever anything beyond
+          plain words was recognised, because a search that quietly reinterprets
+          the question is worse than one that ignores it — and because seeing
+          "under $3M" is how you find out which convention "pre-seed" used. */}
+      {reading.length > 0 && (
+        <p className="mt-2 text-[0.8125rem] text-[var(--color-ink-soft)]">
+          <span className="label mr-2">Reading as</span>
+          {reading.join(" · ")}
+        </p>
+      )}
+
+      {/* The part of the question that could not be honoured. Naming it is the
+          point: returning a confident list that silently ignores half of what
+          was asked is the failure this project keeps finding. */}
+      {unsupported.length > 0 && (
+        <p className="mt-1.5 text-[0.8125rem] text-[var(--color-maybe)]">
+          Not applied — {unsupported.join("; ")}.
+        </p>
+      )}
 
       {/* Said once, next to the box, because it is the difference between this
           and a search engine: it only covers companies already judged. */}

@@ -54,6 +54,7 @@ from src.funding import (
 )
 from src.contact import gmail_compose_url, gmail_search_url
 from src.models import FitVerdict
+from src.query import parse_query
 from src.research import Researcher
 from src.signals import Assessment, assess
 from src.people import PersonLink, most_connected, shared_people
@@ -112,6 +113,13 @@ class CandidateList(BaseModel):
     count: int = Field(ge=0)
     unread: int = Field(ge=0)
     candidates: list[StoredCandidate] = Field(default_factory=list)
+
+    # What a typed sentence was understood to mean, and which part of it could
+    # not be honoured. Both are shown on the page: a search that silently
+    # reinterprets the question, or silently drops half of it, is worse than one
+    # that returns nothing.
+    reading: list[str] = Field(default_factory=list)
+    unsupported: list[str] = Field(default_factory=list)
 
 
 class CompanyDetail(BaseModel):
@@ -280,16 +288,29 @@ def get_candidates(
     q: str = Query(default="", max_length=200),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> CandidateList:
-    """Judgements, filtered. Every parameter is optional and combines."""
+    """
+    Judgements, filtered. Every parameter is optional and combines.
+
+    `q` is read as a sentence before it is read as words: a stage, a size, a
+    domain, a verdict or a date in the text becomes a filter, and only what is
+    left over is matched as text. The explicit parameters still win, so a
+    dropdown set by hand is never overridden by a word in the box.
+    """
     with closing(connect()) as connection:
+        parsed = parse_query(
+            q, sorted(set(available_themes()) | set(known_themes(connection)))
+        )
+
         found = list_candidates(
             connection,
-            verdicts=verdict,
-            since=since,
+            verdicts=verdict or parsed.verdicts or None,
+            since=since or parsed.since,
             until=until,
-            theme=theme,
+            theme=theme or parsed.theme,
             unread_only=unread_only,
-            query_text=q,
+            query_text=parsed.text or None,
+            min_amount=parsed.min_amount,
+            max_amount=parsed.max_amount,
             limit=limit,
         )
 
@@ -297,6 +318,8 @@ def get_candidates(
             count=len(found),
             unread=count_unread(connection, theme=theme),
             candidates=found,
+            reading=parsed.reading,
+            unsupported=parsed.unsupported,
         )
 
 
@@ -884,6 +907,12 @@ def ask(question: Question) -> ChatAnswer:
                 connection,
                 question.question,
                 theme=question.theme,
+                # So a domain named in the question selects that domain's rows,
+                # rather than the question being answered from whichever ones
+                # happened to be judged most recently.
+                themes=sorted(
+                    set(available_themes()) | set(known_themes(connection))
+                ),
             )
         except ChatError as exc:
             message = str(exc)

@@ -263,3 +263,18 @@ def test_wildcards_are_matched_literally(db) -> None:
 
     assert [c.company_name for c in list_candidates(db, query_text="%")] == ["100% Health"]
     assert list_candidates(db, query_text="_") == []
+
+
+def test_listing_can_filter_by_size(db) -> None:
+    save_candidate(db, candidate(accession="a", amount=500_000))
+    save_candidate(db, candidate(accession="b", amount=20_000_000))
+
+    assert [c.offering_amount for c in list_candidates(db, max_amount=1_000_000)] == [500_000]
+    assert [c.offering_amount for c in list_candidates(db, min_amount=1_000_000)] == [20_000_000]
+
+
+def test_an_undisclosed_raise_does_not_satisfy_a_size_filter(db) -> None:
+    """Not stating an amount is not the same as raising nothing."""
+    save_candidate(db, candidate(accession="a", amount=None))
+
+    assert list_candidates(db, max_amount=1_000_000) == []
