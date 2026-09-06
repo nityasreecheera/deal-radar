@@ -81,6 +81,7 @@ class StoredCandidate(BaseModel):
     # disagreed — not that they agreed.
     user_verdict: FitVerdict | None = None
     user_note: str | None = None
+    profile: str | None = None
     decided_at: str | None = None
 
     # Detail from the filing. Officers and directors are the most useful part:
@@ -406,6 +407,25 @@ def list_candidates(
     rows = connection.execute(" ".join(query), parameters).fetchall()
 
     return [StoredCandidate(**dict(row)) for row in rows]
+
+
+def save_profile(
+    connection: sqlite3.Connection,
+    accession: str,
+    profile: str,
+) -> None:
+    """
+    Keep a written explanation so it is paid for once.
+
+    Written for every judgement of this filing, not just the one being read: the
+    company is the same company whichever thesis judged it, and re-writing it per
+    domain would buy the same paragraph five times.
+    """
+    connection.execute(
+        "UPDATE candidate SET profile = ? WHERE accession = ?",
+        (profile, accession),
+    )
+    connection.commit()
 
 
 def mark_viewed(

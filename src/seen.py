@@ -215,6 +215,10 @@ MIGRATIONS: tuple[tuple[str, str, str], ...] = (
         "ALTER TABLE candidate ADD COLUMN user_verdict TEXT",
     ),
     ("candidate", "user_note", "ALTER TABLE candidate ADD COLUMN user_note TEXT"),
+    # A written explanation of the company, replacing the scraped marketing on
+    # the page. Filled on first view rather than at judging time, so it costs a
+    # call for each company someone actually opens.
+    ("candidate", "profile", "ALTER TABLE candidate ADD COLUMN profile TEXT"),
     ("candidate", "decided_at", "ALTER TABLE candidate ADD COLUMN decided_at TEXT"),
     (
         "candidate",

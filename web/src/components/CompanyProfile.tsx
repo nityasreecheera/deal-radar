@@ -1,6 +1,7 @@
 "use client";
 
 import { CompanyDetail } from "@/components/CompanyDetail";
+import { Explanation } from "@/components/Explanation";
 import {
   filingUrl,
   formatAmount,
@@ -108,11 +109,7 @@ export function CompanyProfile({
         <Fact label="Registered" value={candidate.jurisdiction ?? "unknown"} />
       </dl>
 
-      {candidate.description && (
-        <p className="max-w-2xl border-l border-[var(--color-rule)] pl-4 text-[0.8125rem] leading-relaxed text-[var(--color-ink-faint)] italic">
-          {candidate.description}
-        </p>
-      )}
+      <Explanation accession={candidate.accession} />
 
       {detail && <CompanyDetail detail={detail} />}
 

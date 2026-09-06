@@ -43,6 +43,7 @@ from src.candidates import (
     subdomain_counts,
     record_outreach,
     source_breakdown,
+    save_profile,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
 from src.funding import (
@@ -54,6 +55,8 @@ from src.funding import (
 )
 from src.contact import gmail_compose_url, gmail_search_url
 from src.models import FitVerdict
+from src.profile import Unavailable as ProfileUnavailable
+from src.profile import tidy, write_profile
 from src.query import parse_query
 from src.research import Researcher
 from src.signals import Assessment, assess
@@ -321,6 +324,59 @@ def get_candidates(
             reading=parsed.reading,
             unsupported=parsed.unsupported,
         )
+
+
+class CompanyExplanation(BaseModel):
+    """A written explanation of a company, or the reason there isn't one."""
+
+    accession: str
+    profile: str | None = None
+
+    # The company's own scraped words, tidied. Shown when nothing could be
+    # written, so the page still says something rather than going blank — but
+    # labelled as theirs, because it is marketing and reads like it.
+    fallback: str | None = None
+    unavailable: str | None = None
+
+
+@app.get("/api/candidates/{accession}/profile", response_model=CompanyExplanation)
+def get_profile(accession: str) -> CompanyExplanation:
+    """
+    A readable explanation of what a company does.
+
+    Written on the first request and kept, so a company nobody opens costs
+    nothing. If the model cannot be reached the scraped text comes back instead,
+    marked as the company's own words — a page that invented a profile when the
+    lookup failed would be the mistake this project keeps finding.
+    """
+    with closing(connect()) as connection:
+        found = get_candidate(connection, accession)
+
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no such filing: {accession}")
+
+        if found.profile:
+            return CompanyExplanation(accession=accession, profile=found.profile)
+
+        try:
+            written = write_profile(
+                found.company_name,
+                summary=found.summary,
+                description=found.description,
+                website=found.website,
+                industry_group=found.industry_group,
+                amount=found.offering_amount,
+            )
+        except ProfileUnavailable as exc:
+            return CompanyExplanation(
+                accession=accession,
+                fallback=tidy(found.description) or None,
+                unavailable=str(exc),
+            )
+
+        save_profile(connection, accession, written)
+
+        return CompanyExplanation(accession=accession, profile=written)
 
 
 @app.get(
