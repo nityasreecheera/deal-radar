@@ -73,6 +73,7 @@ export type CandidateFilters = {
   since?: string;
   until?: string;
   unreadOnly?: boolean;
+  q?: string;
   limit?: number;
 };
 
@@ -87,6 +88,7 @@ export function buildQuery(filters: CandidateFilters): string {
   if (filters.since) params.set("since", filters.since);
   if (filters.until) params.set("until", filters.until);
   if (filters.unreadOnly) params.set("unread_only", "true");
+  if (filters.q) params.set("q", filters.q);
   if (filters.limit) params.set("limit", String(filters.limit));
 
   const query = params.toString();

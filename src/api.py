@@ -277,6 +277,7 @@ def get_candidates(
     since: str | None = None,
     until: str | None = None,
     unread_only: bool = False,
+    q: str = Query(default="", max_length=200),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> CandidateList:
     """Judgements, filtered. Every parameter is optional and combines."""
@@ -288,6 +289,7 @@ def get_candidates(
             until=until,
             theme=theme,
             unread_only=unread_only,
+            query_text=q,
             limit=limit,
         )
 

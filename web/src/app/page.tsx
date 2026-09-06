@@ -7,6 +7,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AskBox } from "@/components/AskBox";
 import { CandidateRow } from "@/components/CandidateRow";
 import { LogoutButton } from "@/components/LogoutButton";
+import { SearchBox } from "@/components/SearchBox";
 import {
   VERDICTS,
   VERDICT_LABEL,
@@ -51,6 +52,7 @@ function CandidateList() {
   const since = params.get("since") ?? "";
   const until = params.get("until") ?? "";
   const unreadOnly = params.get("unread") === "1";
+  const search = params.get("q") ?? "";
 
   // An explicitly empty `verdict` means "none selected", which is different
   // from the parameter being absent. Reading it as absent would silently
@@ -88,9 +90,10 @@ function CandidateList() {
         since: since || undefined,
         until: until || undefined,
         unreadOnly,
+        q: search || undefined,
         limit: 200,
       }),
-    [verdicts, theme, since, until, unreadOnly],
+    [verdicts, theme, since, until, unreadOnly, search],
   );
 
   const loadMeta = useCallback(async () => {
@@ -259,6 +262,10 @@ function CandidateList() {
       </header>
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-8">
+        <section className="border-b border-[var(--color-rule)] pt-5">
+          <SearchBox value={search} onCommit={(q) => setFilters({ q: q || null })} />
+        </section>
+
         <section className="flex flex-wrap items-end gap-x-8 gap-y-4 border-b border-[var(--color-rule)] py-5">
           <label>
             <span className="label mb-1 block">Domain</span>

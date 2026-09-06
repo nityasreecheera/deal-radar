@@ -188,3 +188,78 @@ def test_verdict_tally(db) -> None:
     save_candidate(db, candidate(accession="c", verdict="no_fit", name="Third Co"))
 
     assert count_by_verdict(db) == {"fits": 2, "no_fit": 1}
+
+
+def test_search_matches_the_company_name(db) -> None:
+    save_candidate(db, candidate(name="Glacian Technologies Inc.", accession="a"))
+    save_candidate(db, candidate(name="Genomenon, Inc.", accession="b"))
+
+    found = list_candidates(db, query_text="glacian")
+
+    assert [c.company_name for c in found] == ["Glacian Technologies Inc."]
+
+
+def test_search_looks_beyond_the_name(db) -> None:
+    """The reason a company was judged is as searchable as what it is called."""
+    save_candidate(
+        db,
+        candidate(accession="a", reason="AI cooling optimisation for data centres."),
+    )
+    save_candidate(db, candidate(accession="b", reason="Clinical trial matching."))
+
+    assert len(list_candidates(db, query_text="cooling")) == 1
+
+
+def test_search_ignores_case(db) -> None:
+    save_candidate(db, candidate(name="Glacian Technologies Inc."))
+
+    assert len(list_candidates(db, query_text="GLACIAN")) == 1
+
+
+def test_every_word_must_match_but_not_in_the_same_field(db) -> None:
+    """
+    "cooling data" should find a company whose reason mentions cooling and whose
+    name mentions data. Requiring one field to hold the whole phrase would miss
+    it; requiring only one word to match would return most of the database.
+    """
+    save_candidate(
+        db,
+        candidate(
+            name="Eagle Mountain Data Inc",
+            accession="a",
+            reason="Runs GPU clusters with liquid cooling.",
+        ),
+    )
+    save_candidate(db, candidate(name="Genomenon, Inc.", accession="b"))
+
+    assert len(list_candidates(db, query_text="cooling data")) == 1
+    assert list_candidates(db, query_text="cooling genomenon") == []
+
+
+def test_search_combines_with_the_other_filters(db) -> None:
+    save_candidate(db, candidate(name="Glacian A", accession="a", verdict="fits"))
+    save_candidate(db, candidate(name="Glacian B", accession="b", verdict="no_fit"))
+
+    found = list_candidates(db, query_text="glacian", verdicts=["fits"])
+
+    assert [c.company_name for c in found] == ["Glacian A"]
+
+
+def test_an_empty_search_filters_nothing(db) -> None:
+    save_candidate(db, candidate(accession="a"))
+    save_candidate(db, candidate(accession="b"))
+
+    assert len(list_candidates(db, query_text="   ")) == 2
+    assert len(list_candidates(db, query_text=None)) == 2
+
+
+def test_wildcards_are_matched_literally(db) -> None:
+    """
+    LIKE treats % and _ as wildcards. Typed by a person they are just characters,
+    and a search for "%" that returned the whole database would be a bug.
+    """
+    save_candidate(db, candidate(name="Genomenon, Inc.", accession="a"))
+    save_candidate(db, candidate(name="100% Health", accession="b"))
+
+    assert [c.company_name for c in list_candidates(db, query_text="%")] == ["100% Health"]
+    assert list_candidates(db, query_text="_") == []

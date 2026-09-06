@@ -23,6 +23,33 @@ from src.models import Candidate, FitVerdict, RelatedPerson
 from src.people import save_people
 
 
+# What a free-text search looks in. Deliberately the fields a person can see on
+# the page: searching a column the interface never shows would return rows with
+# no visible reason for matching.
+SEARCHED_FIELDS = (
+    "company_name",
+    "summary",
+    "reason",
+    "description",
+    "city",
+    "website",
+)
+
+
+def escape_like(text: str) -> str:
+    """
+    Make a typed word safe to put inside a LIKE pattern.
+
+    `%` and `_` are wildcards in LIKE, so a search for "50_50" would otherwise
+    match "5000" and a search for "%" would match every row. The backslash is
+    escaped first, or it would escape the escapes.
+    """
+    for character in ("\\", "%", "_"):
+        text = text.replace(character, "\\" + character)
+
+    return text
+
+
 class StoredCandidate(BaseModel):
     """A judgement as it comes back out of the database."""
 
@@ -296,6 +323,7 @@ def list_candidates(
     until: str | None = None,
     theme: str | None = None,
     unread_only: bool = False,
+    query_text: str | None = None,
     limit: int | None = None,
 ) -> list[StoredCandidate]:
     """
@@ -305,6 +333,11 @@ def list_candidates(
     rather than interpolated, even though every caller is currently internal —
     `theme` comes from a dropdown and `since` from a date picker, and both will
     eventually arrive from a browser.
+
+    `query_text` is free text typed by a person, and the only parameter here that
+    is not chosen from a fixed set. It is matched with LIKE against the fields a
+    person would expect to search — what the company is called, what it does, why
+    it was judged that way, and where it is — and bound like everything else.
     """
     query = ["SELECT * FROM candidate"]
     clauses: list[str] = []
@@ -332,6 +365,21 @@ def list_candidates(
 
     if unread_only:
         clauses.append("viewed_at IS NULL")
+
+    # Every word must appear somewhere, but not all in the same field: "cooling
+    # data centre" should find a company whose summary says cooling and whose
+    # reason says data centre. Matching the whole phrase against one column
+    # would miss it, and matching any word would return most of the database.
+    for word in (query_text or "").split():
+        clauses.append(
+            "("
+            + " OR ".join(
+                f"{field} LIKE ? ESCAPE '\\'"
+                for field in SEARCHED_FIELDS
+            )
+            + ")"
+        )
+        parameters.extend([f"%{escape_like(word)}%"] * len(SEARCHED_FIELDS))
 
     if clauses:
         query.append("WHERE " + " AND ".join(clauses))
