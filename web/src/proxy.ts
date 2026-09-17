@@ -30,7 +30,10 @@ const USER = process.env.SHARE_USER;
 const PASSWORD = process.env.SHARE_PASSWORD;
 
 // Reachable without a session, or there would be no way to get one.
-const OPEN_PATHS = ["/login", "/auth/login", "/auth/logout"];
+// /invite is open because it is how someone without the password gets a
+// session at all. It grants nothing on its own: the token inside it is signed
+// and dated, and the route refuses anything else.
+const OPEN_PATHS = ["/login", "/auth/login", "/auth/logout", "/invite"];
 
 function unauthorized() {
   return new NextResponse("Authentication required.", {

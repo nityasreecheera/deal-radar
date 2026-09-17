@@ -56,14 +56,68 @@ async function hmac(secret: string, payload: string): Promise<string> {
   return toBase64Url(await crypto.subtle.sign("HMAC", key, encoder.encode(payload)));
 }
 
-/** Mint a cookie value for a session starting now. */
+/**
+ * Mint a cookie value for a session starting now.
+ *
+ * `expiresAt` pins the end explicitly, for a session that must not outlive
+ * whatever granted it — an invite link, say. Without it the session runs the
+ * usual fortnight. The two payload shapes are distinguishable and both are
+ * signed, so an old cookie minted before this existed still verifies.
+ */
 export async function signSession(
   secret: string,
   issuedAt: number = Date.now(),
+  expiresAt?: number,
 ): Promise<string> {
-  const payload = String(issuedAt);
+  const payload =
+    expiresAt === undefined ? String(issuedAt) : `${issuedAt}:${expiresAt}`;
 
   return `${payload}.${await hmac(secret, payload)}`;
+}
+
+/**
+ * Mint a link that grants access until a date, then stops.
+ *
+ * Signed with the same secret, so it is revocable the same way: changing the
+ * share password kills every outstanding invite along with every session. The
+ * expiry is inside the signed payload rather than alongside it, so it cannot be
+ * edited by whoever holds the link.
+ */
+export async function signInvite(
+  secret: string,
+  expiresAt: number,
+): Promise<string> {
+  const payload = `invite:${expiresAt}`;
+
+  return `${payload}.${await hmac(secret, payload)}`;
+}
+
+/** The moment an invite stops working, or null if it never did. */
+export async function verifyInvite(
+  token: string | undefined,
+  secret: string,
+  now: number = Date.now(),
+): Promise<number | null> {
+  if (!token) return null;
+
+  const separator = token.lastIndexOf(".");
+
+  if (separator <= 0) return null;
+
+  const payload = token.slice(0, separator);
+  const signature = token.slice(separator + 1);
+
+  if (!payload.startsWith("invite:")) return null;
+
+  const expiresAt = Number(payload.slice("invite:".length));
+
+  if (!Number.isFinite(expiresAt) || now > expiresAt) return null;
+
+  // Signature last: an expired link is refused whether or not it was genuine,
+  // and checking the cheap condition first avoids the work.
+  if (!matches(signature, await hmac(secret, payload))) return null;
+
+  return expiresAt;
 }
 
 /**
@@ -87,7 +141,10 @@ export async function verifySession(
   const payload = token.slice(0, separator);
   const signature = token.slice(separator + 1);
 
-  const issuedAt = Number(payload);
+  // Either "issuedAt" or "issuedAt:expiresAt". The second form ends when it
+  // says rather than a fortnight after it began.
+  const [issued, expires] = payload.split(":");
+  const issuedAt = Number(issued);
 
   if (!Number.isFinite(issuedAt)) return false;
 
@@ -95,7 +152,15 @@ export async function verifySession(
 
   // A future issue date means a tampered or clock-skewed cookie. A little slack
   // for skew, then treat it as invalid.
-  if (age < -60 || age > SESSION_MAX_AGE_SECONDS) return false;
+  if (age < -60) return false;
+
+  if (expires === undefined) {
+    if (age > SESSION_MAX_AGE_SECONDS) return false;
+  } else {
+    const expiresAt = Number(expires);
+
+    if (!Number.isFinite(expiresAt) || now > expiresAt) return false;
+  }
 
   return matches(signature, await hmac(secret, payload));
 }

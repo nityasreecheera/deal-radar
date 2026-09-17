@@ -94,3 +94,111 @@ def test_a_wrong_password_does_not_sign_you_in() -> None:
         assert response.status_code == 303
         assert "error=1" in response.headers["location"]
         assert client.get("/api/meta").status_code == 401
+
+
+# --- invite links -----------------------------------------------------------
+#
+# A link that grants access for a week and then stops. The thing worth proving
+# is the "and then stops" half: an expiring credential that quietly does not
+# expire is worse than a password, because nobody goes looking for it.
+
+import base64
+import hashlib
+import hmac as hmac_module
+import re
+import time
+from pathlib import Path
+
+
+def share_password() -> str | None:
+    env = Path(__file__).resolve().parent.parent / "web" / ".env.local"
+
+    if not env.exists():
+        return None
+
+    found = re.search(r"^SHARE_PASSWORD\s*=\s*(.+)$", env.read_text(), re.M)
+
+    return found.group(1).strip().strip("\"'") if found else None
+
+
+def invite_token(expires_at_ms: int, secret: str) -> str:
+    payload = f"invite:{expires_at_ms}"
+    digest = hmac_module.new(
+        secret.encode(), payload.encode(), hashlib.sha256
+    ).digest()
+    signature = base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+    return f"{payload}.{signature}"
+
+
+needs_password = pytest.mark.skipif(
+    share_password() is None, reason="no share password configured"
+)
+
+
+@needs_password
+def test_a_valid_invite_grants_a_session() -> None:
+    week = int(time.time() * 1000) + 7 * 24 * 60 * 60 * 1000
+    token = invite_token(week, share_password())
+
+    response = httpx.get(
+        f"{SITE}/invite", params={"t": token}, timeout=10, follow_redirects=False
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+    assert "radar_session" in response.cookies
+
+
+@needs_password
+def test_an_expired_invite_grants_nothing() -> None:
+    yesterday = int(time.time() * 1000) - 24 * 60 * 60 * 1000
+    token = invite_token(yesterday, share_password())
+
+    response = httpx.get(
+        f"{SITE}/invite", params={"t": token}, timeout=10, follow_redirects=False
+    )
+
+    assert "radar_session" not in response.cookies
+    assert "/login" in response.headers["location"]
+
+
+@needs_password
+def test_the_expiry_cannot_be_edited_by_whoever_holds_the_link() -> None:
+    """
+    The date is inside the signed payload. Moving it forward invalidates the
+    signature rather than extending the link.
+    """
+    yesterday = int(time.time() * 1000) - 24 * 60 * 60 * 1000
+    far_off = int(time.time() * 1000) + 365 * 24 * 60 * 60 * 1000
+
+    tampered = invite_token(yesterday, share_password()).replace(
+        str(yesterday), str(far_off)
+    )
+
+    response = httpx.get(
+        f"{SITE}/invite", params={"t": tampered}, timeout=10, follow_redirects=False
+    )
+
+    assert "radar_session" not in response.cookies
+
+
+def test_an_unsigned_invite_grants_nothing() -> None:
+    far_off = int(time.time() * 1000) + 365 * 24 * 60 * 60 * 1000
+
+    response = httpx.get(
+        f"{SITE}/invite",
+        params={"t": invite_token(far_off, "not-the-password")},
+        timeout=10,
+        follow_redirects=False,
+    )
+
+    assert "radar_session" not in response.cookies
+
+
+def test_the_invite_path_does_not_open_the_site() -> None:
+    """Reachable without a session, but it hands out nothing on its own."""
+    response = httpx.get(f"{SITE}/invite", timeout=10, follow_redirects=False)
+
+    assert "radar_session" not in response.cookies
+    assert "/login" in response.headers["location"]
