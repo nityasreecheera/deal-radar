@@ -166,6 +166,14 @@ def create_openai_compatible_judge(
                 # Low temperature: this is classification, not writing.
                 "temperature": 0,
                 "response_format": {"type": "json_object"},
+                # A verdict is a small JSON object, so this is generous. It is
+                # here for a second reason: a request with no ceiling is costed
+                # against the model's whole context window, and the provider
+                # refuses it with 402 once the remaining balance is smaller than
+                # that worst case — while there is still plenty of money to pay
+                # for the actual reply. Unbounded requests start failing long
+                # before the credit runs out.
+                "max_tokens": 500,
             },
         )
 

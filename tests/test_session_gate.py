@@ -232,7 +232,18 @@ def guest_session() -> httpx.Client | None:
 
 
 def guest_is_configured() -> bool:
-    client = guest_session()
+    """
+    Runs at import time to decide a skip, so it must survive the site being
+    down — the offline suite collects this file whether or not anything is
+    listening.
+    """
+    if not site_is_up():
+        return False
+
+    try:
+        client = guest_session()
+    except Exception:  # noqa: BLE001
+        return False
 
     if client is None:
         return False
@@ -252,7 +263,7 @@ def test_a_guest_name_alone_signs_in() -> None:
     client = guest_session()
 
     try:
-        assert client.get("/api/meta").status_code == 200
+        assert client.get("/api/health").status_code == 200
     finally:
         client.close()
 
@@ -308,5 +319,56 @@ def test_an_unknown_guest_name_does_not_sign_in() -> None:
         client.post("/auth/login", data={"user": "nosuchguest", "password": ""})
 
         assert "radar_session" not in client.cookies
+    finally:
+        client.close()
+
+
+# --- what a guest cannot reach ---------------------------------------------
+#
+# The judgements are the strategy: which companies were kept, which were passed
+# on, and the reason written beside each. A guest gets the sandbox instead, and
+# these are the tests that say so.
+
+@needs_guest
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/candidates",
+        "/api/analysis",
+        "/api/theses",
+        "/api/disagreements",
+        "/api/people",
+        "/api/digests",
+        "/api/meta",
+    ],
+)
+def test_a_guest_cannot_read_the_owners_record(path: str) -> None:
+    client = guest_session()
+
+    try:
+        assert client.get(path).status_code == 403
+    finally:
+        client.close()
+
+
+@needs_guest
+def test_a_guest_is_sent_to_their_own_page() -> None:
+    client = guest_session()
+
+    try:
+        response = client.get("/")
+
+        assert response.status_code in (302, 303, 307)
+        assert "/try" in response.headers["location"]
+    finally:
+        client.close()
+
+
+@needs_guest
+def test_a_guest_can_reach_the_sandbox() -> None:
+    client = guest_session()
+
+    try:
+        assert client.get("/try").status_code == 200
     finally:
         client.close()

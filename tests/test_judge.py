@@ -272,3 +272,47 @@ def test_no_key_anywhere_is_none(monkeypatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
     assert llm_api_key() is None
+
+
+def test_the_judge_bounds_its_completion(monkeypatch) -> None:
+    """
+    A request with no ceiling is costed against the model's entire context
+    window, and the provider refuses it with 402 once the remaining balance is
+    smaller than that worst case — while there is still money to pay for the
+    reply it would actually have produced. Unbounded requests fail long before
+    the credit runs out, and they fail as "payment required", which reads like
+    an empty account rather than a missing parameter.
+    """
+    sent: dict = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": "{}"}}]}
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        def post(self, url: str, json: dict) -> FakeResponse:
+            sent.update(json)
+            return FakeResponse()
+
+    import src.judge as judge_module
+
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+
+    original = judge_module.httpx.Client
+    judge_module.httpx.Client = FakeClient
+
+    try:
+        judge = judge_module.create_openai_compatible_judge()
+        judge("system", "user")
+    finally:
+        judge_module.httpx.Client = original
+
+    assert sent.get("max_tokens"), "the judge must cap its completion"
