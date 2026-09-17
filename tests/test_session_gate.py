@@ -202,3 +202,111 @@ def test_the_invite_path_does_not_open_the_site() -> None:
 
     assert "radar_session" not in response.cookies
     assert "/login" in response.headers["location"]
+
+
+# --- named guests -----------------------------------------------------------
+#
+# A guest signs in with a name and no password. What makes that safe to hand to
+# a stranger is not the name — it is guessable by design — but everything
+# around it: the session expires on its own, and it cannot write.
+
+GUEST_NAME = os.getenv("RADAR_GUEST", "leonisguest")
+
+
+def guest_session() -> httpx.Client | None:
+    """
+    Sign in as the guest, or None if no guest is configured on this site.
+
+    Returns the client already signed in and already open — callers use it
+    directly rather than in a `with`, because entering a client that has served
+    a request raises.
+    """
+    client = httpx.Client(base_url=SITE, timeout=10, follow_redirects=False)
+    client.post("/auth/login", data={"user": GUEST_NAME, "password": ""})
+
+    if "radar_session" not in client.cookies:
+        client.close()
+        return None
+
+    return client
+
+
+def guest_is_configured() -> bool:
+    client = guest_session()
+
+    if client is None:
+        return False
+
+    client.close()
+
+    return True
+
+
+needs_guest = pytest.mark.skipif(
+    not guest_is_configured(), reason="no guest configured on this site"
+)
+
+
+@needs_guest
+def test_a_guest_name_alone_signs_in() -> None:
+    client = guest_session()
+
+    try:
+        assert client.get("/api/meta").status_code == 200
+    finally:
+        client.close()
+
+
+@needs_guest
+def test_a_guest_cannot_write() -> None:
+    """
+    The point of the read-only rule: a visitor must not be able to overwrite
+    judgements, or clear the unread marks, on someone else's radar.
+    """
+    client = guest_session()
+
+    try:
+        assert client.post("/api/viewed").status_code == 403
+    finally:
+        client.close()
+
+
+@needs_guest
+def test_a_guest_cannot_spend_money() -> None:
+    """/api/chat calls a paid model on every request."""
+    client = guest_session()
+
+    try:
+        response = client.post("/api/chat", json={"question": "anything"})
+
+        assert response.status_code == 403
+    finally:
+        client.close()
+
+
+@needs_guest
+def test_a_guest_session_carries_its_own_expiry() -> None:
+    """
+    Not the usual fortnight. The cookie must die on the guest's date, so access
+    lapses without anyone remembering to remove it.
+    """
+    client = guest_session()
+
+    try:
+        cookie = next(c for c in client.cookies.jar if c.name == "radar_session")
+
+        assert cookie.expires is not None
+        assert cookie.expires < time.time() + 15 * 24 * 60 * 60
+    finally:
+        client.close()
+
+
+def test_an_unknown_guest_name_does_not_sign_in() -> None:
+    client = httpx.Client(base_url=SITE, timeout=10, follow_redirects=False)
+
+    try:
+        client.post("/auth/login", data={"user": "nosuchguest", "password": ""})
+
+        assert "radar_session" not in client.cookies
+    finally:
+        client.close()

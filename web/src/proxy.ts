@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   SESSION_COOKIE,
   matches,
-  verifySession,
+  readSession,
 } from "@/lib/session";
 
 /**
@@ -78,7 +78,26 @@ export async function proxy(request: NextRequest) {
 
   const cookie = request.cookies.get(SESSION_COOKIE)?.value;
 
-  if (await verifySession(cookie, PASSWORD)) {
+  const role = await readSession(cookie, PASSWORD);
+
+  if (role === "guest") {
+    // A guest is shown the tool, not given it. Reading is the whole point;
+    // writing would let a visitor overwrite judgements that took months to
+    // accumulate, and /api/chat spends money on every call.
+    const writes = request.method !== "GET" && request.method !== "HEAD";
+    const costs = request.nextUrl.pathname.startsWith("/api/chat");
+
+    if (writes || costs) {
+      return new NextResponse(
+        "This is a read-only guest session.",
+        { status: 403 },
+      );
+    }
+
+    return NextResponse.next();
+  }
+
+  if (role === "owner") {
     return NextResponse.next();
   }
 

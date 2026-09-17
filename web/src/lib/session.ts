@@ -17,6 +17,15 @@
 
 export const SESSION_COOKIE = "radar_session";
 
+/**
+ * Who a session belongs to.
+ *
+ * "guest" is someone shown the tool rather than someone who runs it. The
+ * distinction is carried inside the signed payload, so it cannot be edited into
+ * "owner" by whoever holds the cookie.
+ */
+export type Role = "owner" | "guest";
+
 // Long enough not to be a daily nuisance on a tool someone opens each morning,
 // short enough that a forgotten laptop stops working within a fortnight.
 export const SESSION_MAX_AGE_SECONDS = 14 * 24 * 60 * 60;
@@ -68,9 +77,12 @@ export async function signSession(
   secret: string,
   issuedAt: number = Date.now(),
   expiresAt?: number,
+  role: Role = "owner",
 ): Promise<string> {
   const payload =
-    expiresAt === undefined ? String(issuedAt) : `${issuedAt}:${expiresAt}`;
+    expiresAt === undefined
+      ? String(issuedAt)
+      : `${issuedAt}:${expiresAt}${role === "guest" ? ":guest" : ""}`;
 
   return `${payload}.${await hmac(secret, payload)}`;
 }
@@ -132,35 +144,52 @@ export async function verifySession(
   secret: string,
   now: number = Date.now(),
 ): Promise<boolean> {
-  if (!token) return false;
+  return (await readSession(token, secret, now)) !== null;
+}
+
+/**
+ * The role a cookie carries, or null if it is not valid.
+ *
+ * Separate from verifySession because the gate needs two different answers from
+ * the same check: whether to let the request through at all, and whether to let
+ * it write.
+ */
+export async function readSession(
+  token: string | undefined,
+  secret: string,
+  now: number = Date.now(),
+): Promise<Role | null> {
+  if (!token) return null;
 
   const separator = token.lastIndexOf(".");
 
-  if (separator <= 0) return false;
+  if (separator <= 0) return null;
 
   const payload = token.slice(0, separator);
   const signature = token.slice(separator + 1);
 
   // Either "issuedAt" or "issuedAt:expiresAt". The second form ends when it
   // says rather than a fortnight after it began.
-  const [issued, expires] = payload.split(":");
+  const [issued, expires, marker] = payload.split(":");
   const issuedAt = Number(issued);
 
-  if (!Number.isFinite(issuedAt)) return false;
+  if (!Number.isFinite(issuedAt)) return null;
 
   const age = (now - issuedAt) / 1000;
 
   // A future issue date means a tampered or clock-skewed cookie. A little slack
   // for skew, then treat it as invalid.
-  if (age < -60) return false;
+  if (age < -60) return null;
 
   if (expires === undefined) {
-    if (age > SESSION_MAX_AGE_SECONDS) return false;
+    if (age > SESSION_MAX_AGE_SECONDS) return null;
   } else {
     const expiresAt = Number(expires);
 
-    if (!Number.isFinite(expiresAt) || now > expiresAt) return false;
+    if (!Number.isFinite(expiresAt) || now > expiresAt) return null;
   }
 
-  return matches(signature, await hmac(secret, payload));
+  if (!matches(signature, await hmac(secret, payload))) return null;
+
+  return marker === "guest" ? "guest" : "owner";
 }

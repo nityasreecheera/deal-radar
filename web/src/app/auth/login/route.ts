@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { findGuest } from "@/lib/guests";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
@@ -43,6 +44,29 @@ export async function POST(request: NextRequest) {
 
   const given = String(form.get("password") || "");
   const givenUser = String(form.get("user") || user);
+
+  // A named guest signs in with the name alone. It grants a read-only session
+  // that ends on the guest's own date rather than the usual fortnight, so
+  // access lapses without anyone having to remember to remove it.
+  const guest = given ? null : findGuest(String(form.get("user") || ""));
+
+  if (guest) {
+    const response = seeOther(destination);
+
+    response.cookies.set(
+      SESSION_COOKIE,
+      await signSession(password, Date.now(), guest.expiresAt, "guest"),
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: Math.floor((guest.expiresAt - Date.now()) / 1000),
+        secure: request.nextUrl.protocol === "https:",
+      },
+    );
+
+    return response;
+  }
 
   if (!matches(givenUser, user) || !matches(given, password)) {
     const back = new URLSearchParams({ error: "1" });
