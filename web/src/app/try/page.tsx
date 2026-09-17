@@ -95,102 +95,133 @@ export default function TryPage() {
     }
   }
 
+  // Labels are plain sentences at a readable size rather than the tiny
+  // letter-spaced capitals used on the owner's pages. Those work as filter
+  // captions above a dense list; here they are the only instructions anyone
+  // gets, and a caption you have to lean in to read is not an instruction.
+  const label = "mb-2 block text-[0.9375rem] font-medium text-[var(--color-ink)]";
+  const hint = "mb-2 block text-[0.8125rem] text-[var(--color-ink-faint)]";
+  const box =
+    "w-full rounded border border-[var(--color-rule)] bg-[var(--color-paper)] " +
+    "px-3 py-2.5 text-[0.9375rem] text-[var(--color-ink)] " +
+    "focus:border-[var(--color-ink)] focus:outline-none";
+
   return (
-    <div className="mx-auto min-h-screen w-full max-w-3xl px-8 py-10">
-      <header className="border-b border-[var(--color-rule)] pb-6">
-        <div className="flex items-baseline justify-between">
-          <h1 className="font-display text-[1.75rem] leading-none tracking-tight">
-            Deal Radar
-          </h1>
-          <LogoutButton />
-        </div>
-
-        <p className="mt-3 max-w-xl text-[0.9375rem] leading-relaxed text-[var(--color-ink-soft)]">
-          Every weekday this reads new SEC Form D filings — companies that have
-          just raised money, usually before any announcement — works out what
-          each one actually does, and judges it against written criteria.
-        </p>
-
-        <p className="mt-2 max-w-xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-faint)]">
-          Write your own criteria below and it will run against the same
-          filings. The judgements from my own theses are not shown.
-        </p>
+    <div className="mx-auto min-h-screen w-full max-w-2xl px-8 py-16">
+      <header className="flex items-baseline justify-between">
+        <h1 className="font-display text-[1.75rem] leading-none tracking-tight">
+          Deal Radar
+        </h1>
+        <LogoutButton />
       </header>
 
-      <section className="space-y-5 border-b border-[var(--color-rule)] py-6">
-        <label className="block">
-          <span className="label mb-1 block">Call it something</span>
+      <p className="mt-6 text-[1.0625rem] leading-relaxed text-[var(--color-ink)]">
+        Every weekday this reads new SEC filings — companies that have just
+        raised money, usually before anyone announces it — and works out what
+        each one does.
+      </p>
+
+      <p className="mt-3 text-[0.9375rem] leading-relaxed text-[var(--color-ink-soft)]">
+        Tell it what you are looking for and it will go through the same
+        companies for you.
+      </p>
+
+      <section className="mt-12 space-y-10">
+        <div>
+          <label className={label} htmlFor="domain">
+            Name your search
+          </label>
           <input
+            id="domain"
             value={domain}
             onChange={(event) => setDomain(event.target.value)}
             placeholder="Data centre infrastructure"
             maxLength={40}
-            className="field w-full"
+            className={box}
           />
-        </label>
+        </div>
 
-        <label className="block">
-          <span className="label mb-1 block">
-            What you are looking for — one per line
-          </span>
+        <div>
+          <label className={label} htmlFor="include">
+            What you are looking for
+          </label>
+          <span className={hint}>One per line. Plain English is fine.</span>
           <textarea
+            id="include"
             value={include}
             onChange={(event) => setInclude(event.target.value)}
             rows={4}
-            className="field w-full resize-y font-[inherit]"
+            className={`${box} resize-y font-[inherit] leading-relaxed`}
           />
-        </label>
+        </div>
 
-        <label className="block">
-          <span className="label mb-1 block">
-            What rules a company out — one per line, optional
-          </span>
+        <div>
+          <label className={label} htmlFor="exclude">
+            What to leave out
+          </label>
+          <span className={hint}>Optional.</span>
           <textarea
+            id="exclude"
             value={exclude}
             onChange={(event) => setExclude(event.target.value)}
             rows={2}
             placeholder="consultancies&#10;real estate"
-            className="field w-full resize-y font-[inherit]"
+            className={`${box} resize-y font-[inherit] leading-relaxed`}
           />
-        </label>
+        </div>
 
-        <div className="flex flex-wrap items-end gap-6">
-          <label>
-            <span className="label mb-1 block">Raising no more than ($M)</span>
-            <input
-              value={maxAmount}
-              onChange={(event) => setMaxAmount(event.target.value)}
-              type="number"
-              min="0"
-              step="0.1"
-              placeholder="any"
-              className="field tabular w-32"
-            />
+        <div>
+          <label className={label} htmlFor="max">
+            Biggest raise you would consider
           </label>
+          <span className={hint}>In millions. Leave blank for any size.</span>
+          <input
+            id="max"
+            value={maxAmount}
+            onChange={(event) => setMaxAmount(event.target.value)}
+            type="number"
+            min="0"
+            step="0.1"
+            placeholder="any"
+            className={`${box} tabular max-w-[10rem]`}
+          />
+        </div>
 
+        <div className="border-t border-[var(--color-rule)] pt-8">
           <button
             type="button"
             onClick={search}
             disabled={running}
-            className="rounded border border-[var(--color-ink)] bg-[var(--color-ink)] px-4 py-2 text-sm text-[var(--color-paper)] transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="w-full rounded border border-[var(--color-ink)] bg-[var(--color-ink)] px-4 py-3 text-[0.9375rem] text-[var(--color-paper)] transition-opacity hover:opacity-90 disabled:opacity-50 sm:w-auto sm:px-8"
           >
-            {running ? "Reading filings…" : "Run it"}
+            {running ? "Reading filings…" : "Find companies"}
           </button>
-        </div>
 
-        {failed && (
-          <p className="text-[0.8125rem] text-[var(--color-nofit)]">{failed}</p>
-        )}
+          <p className="mt-3 text-[0.8125rem] text-[var(--color-ink-faint)]">
+            Takes about half a minute. It reads a dozen companies each time.
+          </p>
+
+          {failed && (
+            <p className="mt-3 text-[0.9375rem] text-[var(--color-nofit)]">
+              {failed}
+            </p>
+          )}
+        </div>
       </section>
 
       {run && (
-        <section className="py-6">
-          <p className="label mb-5">
-            Judged {run.judged} of {run.considered} companies ·{" "}
-            {run.results.length} worth a look
+        <section className="mt-14 border-t border-[var(--color-rule)] pt-10">
+          <h2 className="text-[1.0625rem] font-medium">
+            {run.results.length === 0
+              ? "Nothing matched"
+              : `${run.results.length} worth a look`}
+          </h2>
+
+          <p className="mt-1 mb-8 text-[0.8125rem] text-[var(--color-ink-faint)]">
+            Read {run.judged} companies out of {run.considered} on file.
           </p>
 
-          <div className="space-y-6">
+          <div className="space-y-9">
             {run.results.map((result) => (
               <article
                 key={result.company_name + result.filed_date}
