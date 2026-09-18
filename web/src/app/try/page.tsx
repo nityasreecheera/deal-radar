@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { CriteriaList } from "@/components/CriteriaList";
 import { LogoutButton } from "@/components/LogoutButton";
 import { formatAmount } from "@/lib/api";
 
@@ -24,10 +25,9 @@ type Run = {
   problems: string[];
 };
 
-const EXAMPLE = [
-  "software that makes data centres cheaper to run",
-  "battery storage and grid hardware",
-];
+// Matches the cap the API enforces, so the limit is reached with an
+// explanation in the box rather than a rejection after a round trip.
+const MAX_CRITERIA = 8;
 
 /**
  * Write your own criteria; see what the radar finds.
@@ -39,25 +39,17 @@ const EXAMPLE = [
  */
 export default function TryPage() {
   const [domain, setDomain] = useState("");
-  const [include, setInclude] = useState(EXAMPLE.join("\n"));
-  const [exclude, setExclude] = useState("");
+  const [include, setInclude] = useState<string[]>([]);
+  const [exclude, setExclude] = useState<string[]>([]);
   const [maxAmount, setMaxAmount] = useState("");
 
   const [run, setRun] = useState<Run | null>(null);
   const [running, setRunning] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
-  const lines = (text: string) =>
-    text
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-
   async function search() {
-    const criteria = lines(include);
-
-    if (!domain.trim() || criteria.length === 0) {
-      setFailed("Give it a name and at least one line of criteria.");
+    if (!domain.trim() || include.length === 0) {
+      setFailed("Give it a name and at least one thing to look for.");
       return;
     }
 
@@ -71,8 +63,8 @@ export default function TryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           domain: domain.trim(),
-          include: criteria,
-          exclude: lines(exclude),
+          include,
+          exclude,
           max_amount: maxAmount ? Number(maxAmount) * 1_000_000 : null,
         }),
       });
@@ -141,34 +133,23 @@ export default function TryPage() {
           />
         </div>
 
-        <div>
-          <label className={label} htmlFor="include">
-            What you are looking for
-          </label>
-          <span className={hint}>One per line. Plain English is fine.</span>
-          <textarea
-            id="include"
-            value={include}
-            onChange={(event) => setInclude(event.target.value)}
-            rows={4}
-            className={`${box} resize-y font-[inherit] leading-relaxed`}
-          />
-        </div>
+        <CriteriaList
+          label="What you are looking for"
+          hint="Add them one at a time. Plain English is fine."
+          placeholder="software that makes data centres cheaper to run"
+          items={include}
+          onChange={setInclude}
+          max={MAX_CRITERIA}
+        />
 
-        <div>
-          <label className={label} htmlFor="exclude">
-            What to leave out
-          </label>
-          <span className={hint}>Optional.</span>
-          <textarea
-            id="exclude"
-            value={exclude}
-            onChange={(event) => setExclude(event.target.value)}
-            rows={2}
-            placeholder="consultancies&#10;real estate"
-            className={`${box} resize-y font-[inherit] leading-relaxed`}
-          />
-        </div>
+        <CriteriaList
+          label="What to leave out"
+          hint="Optional."
+          placeholder="consultancies"
+          items={exclude}
+          onChange={setExclude}
+          max={MAX_CRITERIA}
+        />
 
         <div>
           <label className={label} htmlFor="max">
