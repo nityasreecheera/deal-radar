@@ -115,15 +115,15 @@ export default function TryPage() {
         <LogoutButton />
       </header>
 
+      {/* Two lines. What the companies are, and what to do on this page.
+          Anything more about how it works is answered by using it. */}
       <p className="mt-6 text-[1.0625rem] leading-relaxed text-[var(--color-ink)]">
-        Every weekday this reads new SEC filings — companies that have just
-        raised money, usually before anyone announces it — and works out what
-        each one does.
+        Companies that just raised money, from SEC filings — usually before
+        anyone announces it.
       </p>
 
-      <p className="mt-3 text-[0.9375rem] leading-relaxed text-[var(--color-ink-soft)]">
-        Tell it what you are looking for and it will go through the same
-        companies for you.
+      <p className="mt-2 text-[1.0625rem] leading-relaxed text-[var(--color-ink-soft)]">
+        Tell it what you are looking for.
       </p>
 
       <section className="mt-12 space-y-10">
