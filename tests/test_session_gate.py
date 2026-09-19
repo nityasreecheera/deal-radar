@@ -372,3 +372,91 @@ def test_a_guest_can_reach_the_sandbox() -> None:
         assert client.get("/try").status_code == 200
     finally:
         client.close()
+
+
+# --- API tokens -------------------------------------------------------------
+#
+# For someone else's program. A token lives in a loop somebody else controls,
+# so what it cannot do matters more than what it can.
+
+def api_token(name: str, scope: str, expires_at_ms: int, secret: str) -> str:
+    payload = f"token:{name}:{scope}:{expires_at_ms}"
+    digest = hmac_module.new(secret.encode(), payload.encode(), hashlib.sha256).digest()
+
+    return f"{payload}.{base64.urlsafe_b64encode(digest).decode().rstrip('=')}"
+
+
+def bearer(scope: str, days: int = 30, name: str = "friend") -> dict[str, str]:
+    expires = int(time.time() * 1000) + days * 24 * 60 * 60 * 1000
+
+    return {"Authorization": f"Bearer {api_token(name, scope, expires, share_password())}"}
+
+
+@needs_password
+def test_a_read_token_reads() -> None:
+    response = httpx.get(f"{SITE}/api/candidates?limit=1", headers=bearer("read"), timeout=10)
+
+    assert response.status_code == 200
+
+
+@needs_password
+def test_a_read_token_cannot_write() -> None:
+    response = httpx.post(f"{SITE}/api/viewed", headers=bearer("read"), timeout=10)
+
+    assert response.status_code == 403
+
+
+@needs_password
+def test_a_read_token_cannot_spend_money() -> None:
+    """A token sits inside a loop somebody else wrote. /api/chat bills per call."""
+    response = httpx.post(
+        f"{SITE}/api/chat", headers=bearer("read"), json={"question": "hi"}, timeout=10
+    )
+
+    assert response.status_code == 403
+
+
+@needs_password
+def test_a_sandbox_token_cannot_read_the_record() -> None:
+    response = httpx.get(
+        f"{SITE}/api/candidates?limit=1", headers=bearer("sandbox"), timeout=10
+    )
+
+    assert response.status_code == 403
+
+
+@needs_password
+def test_an_expired_token_grants_nothing() -> None:
+    response = httpx.get(
+        f"{SITE}/api/candidates?limit=1", headers=bearer("read", days=-1), timeout=10
+    )
+
+    assert response.status_code == 401
+
+
+@needs_password
+def test_the_scope_cannot_be_edited_by_whoever_holds_the_token() -> None:
+    """Scope is inside the signature, so promoting sandbox to read breaks it."""
+    header = bearer("sandbox")
+    tampered = header["Authorization"].replace(":sandbox:", ":read:")
+
+    response = httpx.get(
+        f"{SITE}/api/candidates?limit=1",
+        headers={"Authorization": tampered},
+        timeout=10,
+    )
+
+    assert response.status_code == 401
+
+
+def test_an_unsigned_token_grants_nothing() -> None:
+    expires = int(time.time() * 1000) + 86_400_000
+    token = api_token("friend", "read", expires, "not-the-password")
+
+    response = httpx.get(
+        f"{SITE}/api/candidates?limit=1",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+
+    assert response.status_code == 401

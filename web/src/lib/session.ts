@@ -24,7 +24,23 @@ export const SESSION_COOKIE = "radar_session";
  * distinction is carried inside the signed payload, so it cannot be edited into
  * "owner" by whoever holds the cookie.
  */
-export type Role = "owner" | "guest";
+export type Role = "owner" | "reader" | "guest";
+
+/**
+ * What an API token is allowed to do.
+ *
+ * "sandbox" is what a guest gets: run your own criteria, see nothing anyone
+ * else concluded. "read" is for someone integrating against the judgements
+ * themselves — every GET, no writes, and no /api/chat, because that one spends
+ * money on each call and a token is meant to be left running in somebody
+ * else's program.
+ */
+export type Scope = "sandbox" | "read";
+
+const SCOPE_ROLE: Record<Scope, Role> = {
+  sandbox: "guest",
+  read: "reader",
+};
 
 // Long enough not to be a daily nuisance on a tool someone opens each morning,
 // short enough that a forgotten laptop stops working within a fortnight.
@@ -85,6 +101,60 @@ export async function signSession(
       : `${issuedAt}:${expiresAt}${role === "guest" ? ":guest" : ""}`;
 
   return `${payload}.${await hmac(secret, payload)}`;
+}
+
+/**
+ * Mint an API token for someone else's program.
+ *
+ * Carries its own name, scope and expiry, all inside the signature, so none of
+ * the three can be edited by whoever holds it. The name is there for the
+ * moment you need to ask which integration is making all the requests.
+ *
+ * Signed with the share password like everything else, so rotating that
+ * revokes every token at once — a blunt instrument, but a real one, and the
+ * only kind worth having when there is no token table to delete a row from.
+ */
+export async function signToken(
+  secret: string,
+  name: string,
+  scope: Scope,
+  expiresAt: number,
+): Promise<string> {
+  const payload = `token:${name}:${scope}:${expiresAt}`;
+
+  return `${payload}.${await hmac(secret, payload)}`;
+}
+
+/** The role a bearer token carries, or null if it grants nothing. */
+export async function verifyToken(
+  token: string | undefined,
+  secret: string,
+  now: number = Date.now(),
+): Promise<Role | null> {
+  if (!token) return null;
+
+  const separator = token.lastIndexOf(".");
+
+  if (separator <= 0) return null;
+
+  const payload = token.slice(0, separator);
+  const signature = token.slice(separator + 1);
+  const parts = payload.split(":");
+
+  if (parts.length !== 4 || parts[0] !== "token") return null;
+
+  const [, , scope, expires] = parts;
+  const expiresAt = Number(expires);
+
+  if (!Number.isFinite(expiresAt) || now > expiresAt) return null;
+
+  const role = SCOPE_ROLE[scope as Scope];
+
+  if (!role) return null;
+
+  if (!matches(signature, await hmac(secret, payload))) return null;
+
+  return role;
 }
 
 /**

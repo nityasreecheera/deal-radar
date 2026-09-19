@@ -4,6 +4,7 @@ import {
   SESSION_COOKIE,
   matches,
   readSession,
+  verifyToken,
 } from "@/lib/session";
 
 /**
@@ -98,7 +99,36 @@ export async function proxy(request: NextRequest) {
 
   const cookie = request.cookies.get(SESSION_COOKIE)?.value;
 
-  const role = await readSession(cookie, PASSWORD);
+  // A bearer token first, because a program sends one on every request and has
+  // no cookie to fall back on. Tokens are for other people's software; the
+  // cookie is for a person in a browser.
+  const authorization = request.headers.get("authorization");
+  const bearer = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : undefined;
+
+  const role = bearer
+    ? await verifyToken(bearer, PASSWORD)
+    : await readSession(cookie, PASSWORD);
+
+  if (bearer && role === null) {
+    return new NextResponse("That token is not valid or has expired.", {
+      status: 401,
+    });
+  }
+
+  if (role === "reader") {
+    // Read everything, change nothing. /api/chat is excluded with the writes
+    // rather than the reads: it costs money on every call, and a token lives
+    // inside somebody else's loop.
+    const writes = request.method !== "GET" && request.method !== "HEAD";
+
+    if (writes || pathname.startsWith("/api/chat")) {
+      return new NextResponse("This token is read-only.", { status: 403 });
+    }
+
+    return NextResponse.next();
+  }
 
   if (role === "guest") {
     if (guestMayReach(pathname)) {
