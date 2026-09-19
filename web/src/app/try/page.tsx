@@ -38,6 +38,7 @@ const MAX_CRITERIA = 8;
  * are yours, so nothing anyone else decided is on the page.
  */
 export default function TryPage() {
+  const [domain, setDomain] = useState("");
   const [include, setInclude] = useState<string[]>([]);
   const [exclude, setExclude] = useState<string[]>([]);
   const [maxAmount, setMaxAmount] = useState("");
@@ -61,6 +62,7 @@ export default function TryPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          domain: domain.trim(),
           include,
           exclude,
           max_amount: maxAmount ? Number(maxAmount) * 1_000_000 : null,
@@ -117,6 +119,23 @@ export default function TryPage() {
       </p>
 
       <section className="mt-12 space-y-10">
+        <div>
+          <label className={label} htmlFor="domain">
+            Domain
+          </label>
+          <span className={hint}>
+            Optional — energy, fintech, healthcare. It names the run.
+          </span>
+          <input
+            id="domain"
+            value={domain}
+            onChange={(event) => setDomain(event.target.value)}
+            placeholder="Energy"
+            maxLength={40}
+            className={box}
+          />
+        </div>
+
         <CriteriaList
           label="What you are looking for"
           hint="Add them one at a time. Plain English is fine."
@@ -180,6 +199,12 @@ export default function TryPage() {
             {run.results.length === 0
               ? "Nothing matched"
               : `${run.results.length} worth a look`}
+            {domain.trim() && (
+              <span className="text-[var(--color-ink-soft)]">
+                {" "}
+                in {domain.trim()}
+              </span>
+            )}
           </h2>
 
           <p className="mt-1 mb-8 text-[0.8125rem] text-[var(--color-ink-faint)]">
