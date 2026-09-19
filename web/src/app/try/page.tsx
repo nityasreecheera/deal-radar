@@ -207,8 +207,11 @@ export default function TryPage() {
             {running ? "Reading filings…" : "Find companies"}
           </button>
 
+          {/* Only the wait. How many companies get read is a real limit, but
+              before a run it is a number with nothing to compare it to — the
+              result says it afterwards, with the total beside it. */}
           <p className="mt-3 text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Takes about half a minute. It reads a dozen companies each time.
+            Takes about half a minute.
           </p>
 
           {failed && (
@@ -221,11 +224,17 @@ export default function TryPage() {
 
       {run && (
         <section className="mt-14 border-t border-[var(--color-rule)] pt-10">
+          {/* A run where most companies could not be judged is not a run
+              where they did not match. Saying "nothing matched" there would
+              report a conclusion nobody reached — the mistake this project
+              exists to avoid, and it would be reported to a stranger. */}
           <h2 className="text-[1.0625rem] font-medium">
-            {run.results.length === 0
-              ? "Nothing matched"
-              : `${run.results.length} worth a look`}
-            {domain.trim() && (
+            {run.results.length > 0
+              ? `${run.results.length} worth a look`
+              : run.problems.length > 0
+                ? "Could not check"
+                : "Nothing matched"}
+            {domain.trim() && run.results.length > 0 && (
               <span className="text-[var(--color-ink-soft)]">
                 {" "}
                 in {domain.trim()}
@@ -234,7 +243,23 @@ export default function TryPage() {
           </h2>
 
           <p className="mt-1 mb-8 text-[0.8125rem] text-[var(--color-ink-faint)]">
-            Read {run.judged} companies out of {run.considered} on file.
+            {run.judged === 0 ? (
+              <>
+                None of the {run.problems.length} companies could be read, so
+                nothing here has been ruled in or out.
+              </>
+            ) : (
+              <>
+                Of {run.considered} companies on file, the {run.judged} closest
+                to what you asked for were read in full.
+                {run.problems.length > 0 && (
+                  <>
+                    {" "}
+                    Another {run.problems.length} could not be read.
+                  </>
+                )}
+              </>
+            )}
           </p>
 
           <div className="space-y-9">
@@ -305,15 +330,13 @@ export default function TryPage() {
             </p>
           )}
 
-          {/* Said plainly. A run where companies failed to be judged is not a
-              run where they did not match. */}
-          {run.problems.length > 0 && (
-            <p className="mt-6 text-[0.8125rem] text-[var(--color-maybe)]">
-              {run.problems.length}{" "}
-              {run.problems.length === 1 ? "company" : "companies"} could not be
-              judged, so this is not a complete answer.
+          {run.judged === 0 && run.problems.length > 0 && (
+            <p className="text-[0.9375rem] leading-relaxed text-[var(--color-maybe)]">
+              Something is wrong at my end, not with your criteria. Please try
+              again later.
             </p>
           )}
+
         </section>
       )}
     </div>
