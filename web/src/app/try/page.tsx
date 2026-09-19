@@ -231,9 +231,11 @@ export default function TryPage() {
           <h2 className="text-[1.0625rem] font-medium">
             {run.results.length > 0
               ? `${run.results.length} worth a look`
-              : run.problems.length > 0
+              : run.judged === 0
                 ? "Could not check"
-                : "Nothing matched"}
+                : run.problems.length > 0
+                  ? "No matches among the ones I could read"
+                  : "Nothing matched"}
             {domain.trim() && run.results.length > 0 && (
               <span className="text-[var(--color-ink-soft)]">
                 {" "}
