@@ -41,17 +41,39 @@ export default function TryPage() {
   const [domain, setDomain] = useState("");
   const [include, setInclude] = useState<string[]>([]);
   const [exclude, setExclude] = useState<string[]>([]);
+
+  // What is typed but not yet added. Pressing search has to count it: a line
+  // sitting in the box is something the person has said they want, and
+  // ignoring it makes the button look broken.
+  const [includeDraft, setIncludeDraft] = useState("");
+  const [excludeDraft, setExcludeDraft] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
 
   const [run, setRun] = useState<Run | null>(null);
   const [running, setRunning] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
+  /** A list plus whatever is still in its box, without duplicates. */
+  function withDraft(items: string[], draft: string): string[] {
+    const line = draft.trim();
+
+    return line && !items.includes(line) ? [...items, line] : items;
+  }
+
   async function search() {
-    if (include.length === 0) {
-      setFailed("Add at least one thing to look for.");
+    const wanted = withDraft(include, includeDraft);
+    const unwanted = withDraft(exclude, excludeDraft);
+
+    if (wanted.length === 0) {
+      setFailed("Type at least one thing to look for.");
       return;
     }
+
+    // Show them as added, so the run and the page agree on what was asked.
+    setInclude(wanted);
+    setExclude(unwanted);
+    setIncludeDraft("");
+    setExcludeDraft("");
 
     setRunning(true);
     setFailed(null);
@@ -63,8 +85,8 @@ export default function TryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           domain: domain.trim(),
-          include,
-          exclude,
+          include: wanted,
+          exclude: unwanted,
           max_amount: maxAmount ? Number(maxAmount) * 1_000_000 : null,
         }),
       });
@@ -142,6 +164,8 @@ export default function TryPage() {
           placeholder="software that makes data centres cheaper to run"
           items={include}
           onChange={setInclude}
+          draft={includeDraft}
+          onDraftChange={setIncludeDraft}
           max={MAX_CRITERIA}
         />
 
@@ -151,6 +175,8 @@ export default function TryPage() {
           placeholder="consultancies"
           items={exclude}
           onChange={setExclude}
+          draft={excludeDraft}
+          onDraftChange={setExcludeDraft}
           max={MAX_CRITERIA}
         />
 

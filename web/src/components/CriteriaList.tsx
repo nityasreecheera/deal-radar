@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 /**
  * Criteria entered one at a time.
  *
@@ -10,6 +8,11 @@ import { useState } from "react";
  * they got it right — a stray blank line or a trailing comma is invisible until
  * the results come back wrong. Adding one line at a time makes each criterion a
  * thing on the page that can be read back and removed.
+ *
+ * The half-typed line lives in the parent rather than here, because pressing
+ * the search button with text still in the box has to count. Keeping it local
+ * meant that text was invisible to the run and the search refused, which reads
+ * as a broken button rather than a missed step.
  */
 export function CriteriaList({
   label,
@@ -17,6 +20,8 @@ export function CriteriaList({
   placeholder,
   items,
   onChange,
+  draft,
+  onDraftChange,
   max,
 }: {
   label: string;
@@ -24,10 +29,10 @@ export function CriteriaList({
   placeholder: string;
   items: string[];
   onChange: (items: string[]) => void;
+  draft: string;
+  onDraftChange: (draft: string) => void;
   max: number;
 }) {
-  const [draft, setDraft] = useState("");
-
   const full = items.length >= max;
 
   function add() {
@@ -37,12 +42,12 @@ export function CriteriaList({
     // be told the same thing twice and nothing would change except the reader's
     // confidence that the page is listening.
     if (!line || full || items.includes(line)) {
-      setDraft("");
+      onDraftChange("");
       return;
     }
 
     onChange([...items, line]);
-    setDraft("");
+    onDraftChange("");
   }
 
   return (
@@ -82,7 +87,7 @@ export function CriteriaList({
       <div className="flex gap-2">
         <input
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={(event) => {
             // Enter adds. Inside a form it would submit instead, and on a page
             // whose only button runs a paid search that is the wrong default.
