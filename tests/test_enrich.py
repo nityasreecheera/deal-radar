@@ -263,3 +263,27 @@ def test_enrichment_tolerates_a_payload_without_results() -> None:
     result = enrich_filing(filing(), search=empty)
 
     assert result.confident is False
+
+
+def test_a_subdomain_that_echoes_the_name_is_not_the_company() -> None:
+    """
+    "Mae Labs, Inc." was given www.mae.ucla.edu — UCLA's Mechanical and
+    Aerospace Engineering department — because "mae" starts "maelabs". The
+    description that came back described a university research centre, and it
+    reached a reader as though it were the company.
+    """
+    assert not looks_like_own_site("mae.ucla.edu", "Mae Labs, Inc.")
+
+
+def test_a_university_is_never_the_company() -> None:
+    assert not looks_like_own_site("stanford.edu", "Stanford Robotics Inc.")
+    assert not looks_like_own_site("energy.gov", "Energy Systems Inc.")
+
+
+def test_a_real_match_still_passes() -> None:
+    assert looks_like_own_site("glaciantech.com", "Glacian Technologies Inc.")
+    assert looks_like_own_site("www.glaciantech.com", "Glacian Technologies Inc.")
+
+
+def test_a_company_on_its_own_subdomain_still_passes() -> None:
+    assert looks_like_own_site("about.glaciantech.com", "Glacian Technologies Inc.")

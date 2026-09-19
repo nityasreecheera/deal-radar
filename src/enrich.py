@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
+from src.contact import registrable_domain
 from src.models import FormDFiling
 from src.normalize import normalize_company_name, normalize_domain
 
@@ -25,6 +26,9 @@ DEFAULT_MAX_RESULTS = 5
 # Sites that will never be a company's own homepage, so a hit here should not be
 # mistaken for one. Directories rank well for company names, which is exactly
 # the trap.
+# Never a company's own site, whatever the name suggests.
+INSTITUTIONAL_SUFFIXES = (".edu", ".ac.uk", ".gov", ".mil", ".edu.au", ".ac.in")
+
 NON_COMPANY_DOMAINS = {
     "bloomberg.com",
     "crunchbase.com",
@@ -132,8 +136,20 @@ def looks_like_own_site(domain: str | None, company_name: str) -> bool:
     Compares the domain against the normalised company name rather than trying
     to be clever: if the name's letters appear in the domain, it is very likely
     theirs, and if not, we say so instead of guessing.
+
+    The comparison is against the registrable domain, not the leftmost label.
+    A subdomain will happily match a company name that has nothing to do with
+    it: "Mae Labs, Inc." was given www.mae.ucla.edu, UCLA's Mechanical and
+    Aerospace Engineering department, because "mae" is the start of "maelabs".
+    Against "ucla" it fails, which is the right answer.
     """
     if not domain or domain in NON_COMPANY_DOMAINS:
+        return False
+
+    # Institutions are not startups. A university department, a government
+    # office or a military site is never a company's own homepage, however
+    # neatly its acronym lines up with the name on a filing.
+    if any(domain.endswith(suffix) for suffix in INSTITUTIONAL_SUFFIXES):
         return False
 
     canonical = normalize_company_name(company_name)
@@ -141,7 +157,12 @@ def looks_like_own_site(domain: str | None, company_name: str) -> bool:
     if not canonical:
         return False
 
-    stem = domain.split(".")[0].replace("-", "")
+    registrable = registrable_domain(domain)
+
+    if registrable in NON_COMPANY_DOMAINS:
+        return False
+
+    stem = registrable.split(".")[0].replace("-", "")
 
     if not stem:
         return False
