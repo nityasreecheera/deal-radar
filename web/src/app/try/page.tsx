@@ -38,7 +38,6 @@ const MAX_CRITERIA = 8;
  * are yours, so nothing anyone else decided is on the page.
  */
 export default function TryPage() {
-  const [domain, setDomain] = useState("");
   const [include, setInclude] = useState<string[]>([]);
   const [exclude, setExclude] = useState<string[]>([]);
   const [maxAmount, setMaxAmount] = useState("");
@@ -48,8 +47,8 @@ export default function TryPage() {
   const [failed, setFailed] = useState<string | null>(null);
 
   async function search() {
-    if (!domain.trim() || include.length === 0) {
-      setFailed("Give it a name and at least one thing to look for.");
+    if (include.length === 0) {
+      setFailed("Add at least one thing to look for.");
       return;
     }
 
@@ -62,7 +61,6 @@ export default function TryPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          domain: domain.trim(),
           include,
           exclude,
           max_amount: maxAmount ? Number(maxAmount) * 1_000_000 : null,
@@ -119,20 +117,6 @@ export default function TryPage() {
       </p>
 
       <section className="mt-12 space-y-10">
-        <div>
-          <label className={label} htmlFor="domain">
-            Name your search
-          </label>
-          <input
-            id="domain"
-            value={domain}
-            onChange={(event) => setDomain(event.target.value)}
-            placeholder="Data centre infrastructure"
-            maxLength={40}
-            className={box}
-          />
-        </div>
-
         <CriteriaList
           label="What you are looking for"
           hint="Add them one at a time. Plain English is fine."

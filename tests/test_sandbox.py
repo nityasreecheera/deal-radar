@@ -41,9 +41,7 @@ def a_judge(verdict: str = "fits", reason: str = "Matches the criteria."):
 
 
 def request(**overrides) -> SandboxRequest:
-    return SandboxRequest(
-        **{"domain": "Guest", "include": ["cooling and energy"], **overrides}
-    )
+    return SandboxRequest(**{"include": ["cooling and energy"], **overrides})
 
 
 def stock(db, count: int = 3, **extra) -> None:
@@ -236,3 +234,11 @@ def test_a_failure_in_one_company_does_not_lose_the_others(db) -> None:
 
     assert outcome.judged == 2
     assert len(outcome.problems) == 1
+
+
+def test_criteria_alone_are_enough(db) -> None:
+    """Nobody is asked to name the search; the first criterion titles it."""
+    parsed = SandboxRequest(include=["data centre cooling", "grid hardware"])
+
+    assert parsed.label == "data centre cooling"
+    assert parsed.as_thesis().include == ["data centre cooling", "grid hardware"]

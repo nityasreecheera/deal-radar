@@ -62,16 +62,25 @@ COMMON = {
 class SandboxRequest(BaseModel):
     """Criteria typed by someone who is not the owner."""
 
-    domain: str = Field(min_length=1, max_length=40)
+    # Optional, and nobody is asked for it. It becomes a heading above the
+    # criteria in the prompt; the criteria are what actually decide anything, so
+    # asking a guest to invent a label first was asking for work that changed
+    # nothing and was never shown back to them.
+    domain: str = Field(default="", max_length=40)
     include: list[str] = Field(min_length=1, max_length=MAX_CRITERIA)
     exclude: list[str] = Field(default_factory=list, max_length=MAX_CRITERIA)
     min_amount: int | None = Field(default=None, ge=0)
     max_amount: int | None = Field(default=None, ge=0)
 
+    @property
+    def label(self) -> str:
+        """A heading for the prompt, taken from the first criterion if unnamed."""
+        return (self.domain.strip() or self.include[0])[:40]
+
     def as_thesis(self) -> Thesis:
         return Thesis(
-            domain=self.domain[:40],
-            name=self.domain[:40],
+            domain=self.label,
+            name=self.label,
             description=f"Companies matching: {'; '.join(self.include)}",
             include=[line[:MAX_FIELD_LENGTH] for line in self.include if line.strip()],
             exclude=[line[:MAX_FIELD_LENGTH] for line in self.exclude if line.strip()],
