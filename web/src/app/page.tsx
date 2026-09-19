@@ -87,7 +87,9 @@ function CandidateList() {
   const query = useMemo(
     () =>
       buildQuery({
-        verdict: verdicts,
+        // With no domain chosen there is nothing to filter a verdict against,
+        // so the list is what any thesis thought worth a look.
+        verdict: theme ? verdicts : DEFAULT_VERDICTS,
         theme: theme || undefined,
         since: since || undefined,
         until: until || undefined,
@@ -97,6 +99,23 @@ function CandidateList() {
       }),
     [verdicts, theme, since, until, unreadOnly, search],
   );
+
+  // One row per company when no domain is chosen. The same filing is judged
+  // once per thesis, so without this a company that five theses looked at
+  // appears five times, identically, with nothing to tell the rows apart.
+  const shown = useMemo(() => {
+    if (theme) return candidates;
+
+    const seen = new Set<string>();
+
+    return candidates.filter((item) => {
+      if (seen.has(item.company_name)) return false;
+
+      seen.add(item.company_name);
+
+      return true;
+    });
+  }, [candidates, theme]);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -322,7 +341,12 @@ function CandidateList() {
             />
           </label>
 
-          <div className="flex items-baseline gap-4">
+          {/* A verdict belongs to a thesis, so it has no meaning until one is
+              chosen. Across all domains the same company is fits in Energy and
+              no_fit in Healthcare, and filtering on either answers a question
+              nobody asked. The control is hidden rather than disabled: there is
+              nothing to turn back on without first picking a domain. */}
+          <div className={`flex items-baseline gap-4 ${theme ? "" : "hidden"}`}>
             {VERDICTS.map((verdict) => {
               const active = verdicts.includes(verdict);
 
@@ -380,7 +404,7 @@ function CandidateList() {
 
         {loading ? (
           <p className="label py-10">Loading</p>
-        ) : candidates.length === 0 ? (
+        ) : shown.length === 0 ? (
           <p className="py-10 text-sm text-[var(--color-ink-faint)]">
             Nothing matches those filters.
             {verdicts.length === 0 && " Choose at least one verdict."}
@@ -388,7 +412,7 @@ function CandidateList() {
         ) : (
           <>
             <ul className="pb-10">
-              {candidates.map((candidate) => (
+              {shown.map((candidate) => (
                 <CandidateRow
                   key={candidate.accession}
                   candidate={candidate}
@@ -399,7 +423,7 @@ function CandidateList() {
             </ul>
 
             <p className="label pb-10">
-              <span className="tabular">{candidates.length}</span> shown
+              <span className="tabular">{shown.length}</span> shown
               {meta?.earliest_filing && (
                 <>
                   <span className="mx-2 text-[var(--color-rule)]">/</span>
