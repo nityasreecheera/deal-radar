@@ -47,10 +47,18 @@ export function CandidateRow({
   candidate,
   from,
   onRead,
+  domains,
 }: {
   candidate: Candidate;
   from: string;
   onRead: (accession: string) => void;
+  /**
+   * Where this company was found interesting, when the list is not showing one
+   * domain. A verdict belongs to a thesis, so across all of them "fits" has no
+   * referent — but "Energy, AI infra" answers the question the verdict was
+   * failing to.
+   */
+  domains?: string[];
 }) {
   const unread = isUnread(candidate);
   const verdict = effectiveVerdict(candidate);
@@ -66,10 +74,17 @@ export function CandidateRow({
       }`}
     >
       {/* The accent only appears while unread — once read, the row recedes. */}
+      {/* Unread keeps its edge either way. The colour carries the verdict only
+          when a verdict means something; otherwise it is plain ink, which still
+          says "new" without claiming what it is new for. */}
       <span
         aria-hidden
         className={`absolute top-0 bottom-0 left-0 w-[2px] ${
-          unread ? ACCENT[verdict] : "bg-transparent"
+          unread
+            ? domains
+              ? "bg-[var(--color-ink-soft)]"
+              : ACCENT[verdict]
+            : "bg-transparent"
         }`}
       />
 
@@ -106,11 +121,17 @@ export function CandidateRow({
           </span>
         </span>
 
-        <span
-          className={`shrink-0 text-[0.6875rem] tracking-[0.08em] uppercase ${VERDICT_TEXT[verdict]}`}
-        >
-          {VERDICT_LABEL[verdict]}
-        </span>
+        {domains ? (
+          <span className="shrink-0 text-[0.75rem] text-[var(--color-ink-faint)]">
+            {domains.join(", ")}
+          </span>
+        ) : (
+          <span
+            className={`shrink-0 text-[0.6875rem] tracking-[0.08em] uppercase ${VERDICT_TEXT[verdict]}`}
+          >
+            {VERDICT_LABEL[verdict]}
+          </span>
+        )}
       </Link>
     </li>
   );

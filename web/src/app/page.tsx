@@ -100,6 +100,22 @@ function CandidateList() {
     [verdicts, theme, since, until, unreadOnly, search],
   );
 
+  // Which domains found each company interesting. Built before the collapse,
+  // because that is where the other rows still are.
+  const domainsByCompany = useMemo(() => {
+    const found = new Map<string, string[]>();
+
+    for (const item of candidates) {
+      const already = found.get(item.company_name) ?? [];
+
+      if (item.theme && !already.includes(item.theme)) {
+        found.set(item.company_name, [...already, item.theme]);
+      }
+    }
+
+    return found;
+  }, [candidates]);
+
   // One row per company when no domain is chosen. The same filing is judged
   // once per thesis, so without this a company that five theses looked at
   // appears five times, identically, with nothing to tell the rows apart.
@@ -418,6 +434,11 @@ function CandidateList() {
                   candidate={candidate}
                   from={from}
                   onRead={handleRead}
+                  domains={
+                    theme
+                      ? undefined
+                      : domainsByCompany.get(candidate.company_name)
+                  }
                 />
               ))}
             </ul>
