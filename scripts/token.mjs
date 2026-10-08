@@ -1,14 +1,10 @@
 /**
  * Mint an API token for someone else's program.
  *
- *   node scripts/token.mjs --name acme --scope read     --days 90
- *   node scripts/token.mjs --name acme --scope sandbox  --days 30
+ *   node scripts/token.mjs --name acme --days 90
  *
- * Scopes:
- *   read     every GET — the judgements, the analysis, the companies.
- *            No writes, no /api/chat.
- *   sandbox  /api/try only. They run their own criteria and see nothing
- *            anyone else concluded.
+ * Every token is read-only: every GET — the judgements, the analysis, the
+ * companies. No writes, no /api/chat.
  *
  * Reads the share password to sign with and never prints it. Rotating that
  * password revokes every token ever minted, which is the only revocation there
@@ -43,7 +39,7 @@ if (!password) {
 }
 
 const name = flag("name");
-const scope = flag("scope", "sandbox");
+const scope = flag("scope", "read");
 const days = Number(flag("days", "90"));
 
 if (!name || !/^[a-z0-9-]{1,32}$/i.test(name)) {
@@ -51,8 +47,8 @@ if (!name || !/^[a-z0-9-]{1,32}$/i.test(name)) {
   process.exit(1);
 }
 
-if (scope !== "read" && scope !== "sandbox") {
-  console.error("--scope must be 'read' or 'sandbox'.");
+if (scope !== "read") {
+  console.error("--scope must be 'read', the only scope there is.");
   process.exit(1);
 }
 
@@ -88,13 +84,7 @@ console.log(`Expires ${new Date(expiresAt).toUTCString()}\n`);
 console.log(token);
 console.log(`\nUse it like this:\n`);
 console.log(`  curl -H "Authorization: Bearer $TOKEN" \\`);
-console.log(
-  scope === "read"
-    ? `    "${base}/api/candidates?verdict=fits&limit=20"`
-    : `    -X POST -H "Content-Type: application/json" \\\n` +
-      `    -d '{"include":["data centre cooling"]}' \\\n` +
-      `    "${base}/api/try"`,
-);
+console.log(`    "${base}/api/candidates?verdict=fits&limit=20"`);
 console.log(
   `\nAnyone holding this is in until it expires. Rotating SHARE_PASSWORD revokes it.\n`,
 );

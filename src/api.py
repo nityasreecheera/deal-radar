@@ -59,8 +59,6 @@ from src.profile import Unavailable as ProfileUnavailable
 from src.profile import tidy, write_profile
 from src.query import parse_query
 from src.research import Researcher
-from src.sandbox import SandboxRequest, SandboxRun
-from src.sandbox import run as run_sandbox
 from src.signals import Assessment, assess
 from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
@@ -210,31 +208,6 @@ class ErrorBody(BaseModel):
 CHAT_LIMIT_PER_HOUR = int(os.getenv("CHAT_LIMIT_PER_HOUR", "60"))
 
 _chat_times: deque[float] = deque()
-
-# A sandbox run judges up to a dozen companies, so it costs roughly a dozen chat
-# requests. Capped separately and far lower, because the people running it are
-# guests and the bill is not theirs.
-SANDBOX_LIMIT_PER_HOUR = int(os.getenv("SANDBOX_LIMIT_PER_HOUR", "8"))
-
-_sandbox_times: deque[float] = deque()
-
-
-def sandbox_allowance() -> tuple[bool, int]:
-    """Whether another sandbox run is allowed, and how many remain."""
-    now = time.monotonic()
-    cutoff = now - 3600
-
-    while _sandbox_times and _sandbox_times[0] < cutoff:
-        _sandbox_times.popleft()
-
-    remaining = SANDBOX_LIMIT_PER_HOUR - len(_sandbox_times)
-
-    if remaining <= 0:
-        return False, 0
-
-    _sandbox_times.append(now)
-
-    return True, remaining - 1
 
 
 def chat_allowance() -> tuple[bool, int]:
@@ -902,47 +875,6 @@ def record_one_decision(accession: str, decision: Decision) -> StoredCandidate:
         )
 
     return updated
-
-
-@app.post(
-    "/api/try",
-    response_model=SandboxRun,
-    responses={429: {"model": ErrorBody}, 503: {"model": ErrorBody}},
-)
-def try_criteria(request: SandboxRequest) -> SandboxRun:
-    """
-    Run someone else's criteria against the same filings.
-
-    This is what a guest gets instead of the judgements. The companies are public
-    SEC filings and the descriptions are public web pages; what stays private is
-    every verdict, reason and note the owner has written, because those are the
-    thesis rather than the data.
-    """
-    allowed, _ = sandbox_allowance()
-
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "ok": False,
-                "errors": [
-                    f"Too many runs — the limit is {SANDBOX_LIMIT_PER_HOUR} an "
-                    "hour. Try again later."
-                ],
-            },
-        )
-
-    with closing(connect()) as connection:
-        try:
-            return run_sandbox(connection, request)
-        except Exception as exc:  # noqa: BLE001
-            # A run that could not happen is reported as a run that could not
-            # happen. Returning an empty result would say "nothing matched your
-            # criteria", which is a finding nobody made.
-            raise HTTPException(
-                status_code=503,
-                detail={"ok": False, "errors": [f"Could not run: {exc}"]},
-            ) from exc
 
 
 @app.get("/api/disagreements", response_model=list[StoredCandidate])

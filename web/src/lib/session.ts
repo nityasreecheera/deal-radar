@@ -20,25 +20,21 @@ export const SESSION_COOKIE = "radar_session";
 /**
  * Who a session belongs to.
  *
- * "guest" is someone shown the tool rather than someone who runs it. The
- * distinction is carried inside the signed payload, so it cannot be edited into
- * "owner" by whoever holds the cookie.
+ * "owner" is a person signed in with the password or an invite link. "reader"
+ * is someone else's program holding an API token.
  */
-export type Role = "owner" | "reader" | "guest";
+export type Role = "owner" | "reader";
 
 /**
  * What an API token is allowed to do.
  *
- * "sandbox" is what a guest gets: run your own criteria, see nothing anyone
- * else concluded. "read" is for someone integrating against the judgements
- * themselves — every GET, no writes, and no /api/chat, because that one spends
- * money on each call and a token is meant to be left running in somebody
- * else's program.
+ * "read" is for someone integrating against the judgements themselves — every
+ * GET, no writes, and no /api/chat, because that one spends money on each call
+ * and a token is meant to be left running in somebody else's program.
  */
-export type Scope = "sandbox" | "read";
+export type Scope = "read";
 
 const SCOPE_ROLE: Record<Scope, Role> = {
-  sandbox: "guest",
   read: "reader",
 };
 
@@ -93,12 +89,9 @@ export async function signSession(
   secret: string,
   issuedAt: number = Date.now(),
   expiresAt?: number,
-  role: Role = "owner",
 ): Promise<string> {
   const payload =
-    expiresAt === undefined
-      ? String(issuedAt)
-      : `${issuedAt}:${expiresAt}${role === "guest" ? ":guest" : ""}`;
+    expiresAt === undefined ? String(issuedAt) : `${issuedAt}:${expiresAt}`;
 
   return `${payload}.${await hmac(secret, payload)}`;
 }
@@ -240,7 +233,13 @@ export async function readSession(
 
   // Either "issuedAt" or "issuedAt:expiresAt". The second form ends when it
   // says rather than a fortnight after it began.
-  const [issued, expires, marker] = payload.split(":");
+  const parts = payload.split(":");
+
+  // A third part was a guest's marker. Guest access is gone, and a cookie
+  // still carrying one must not be read as the owner's, so it grants nothing.
+  if (parts.length > 2) return null;
+
+  const [issued, expires] = parts;
   const issuedAt = Number(issued);
 
   if (!Number.isFinite(issuedAt)) return null;
@@ -261,5 +260,5 @@ export async function readSession(
 
   if (!matches(signature, await hmac(secret, payload))) return null;
 
-  return marker === "guest" ? "guest" : "owner";
+  return "owner";
 }
