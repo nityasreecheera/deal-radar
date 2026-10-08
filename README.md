@@ -64,27 +64,6 @@ Three things, all of them boring, which is why nobody builds for them:
 - **Every new name costs the same twenty minutes** of looking things up, and nine
   times out of ten the answer is no.
 
-## Why not Crunchbase
-
-Crunchbase has vastly more data than this will ever have, and that's not worth
-competing on. It's a supermarket. Everything's there and you do the shopping.
-
-Two things it can't do:
-
-| | Crunchbase | Deal Radar |
-|---|---|---|
-| Getting to it | You go and search | It arrives |
-| Companies you've rejected | Show up again every time | Never appear again |
-| Your thesis | Re-entered as filters, every session | Written down once |
-| Time per day | 30–45 minutes | 2 minutes |
-
-**It's not faster data.** Crunchbase pulls the same public filings within a day or
-two. The difference is when *you* find out. Something can sit in a database for a
-week while you have no idea, because you never ran the right search.
-
-They're not really competitors. Crunchbase could be a source *for* this. The part
-that matters is the memory and the filter on top, whatever's underneath.
-
 ## What it's found
 
 Running against live SEC filings from 1 June to 11 August 2026:
