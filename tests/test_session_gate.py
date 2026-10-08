@@ -204,172 +204,40 @@ def test_the_invite_path_does_not_open_the_site() -> None:
     assert "/login" in response.headers["location"]
 
 
-# --- named guests -----------------------------------------------------------
+# --- guest access, removed -------------------------------------------------
 #
-# A guest signs in with a name and no password. What makes that safe to hand to
-# a stranger is not the name — it is guessable by design — but everything
-# around it: the session expires on its own, and it cannot write.
+# Guests used to sign in with a name alone and got a cookie marked ":guest".
+# That access is gone, and a cookie minted before it went must not be read as
+# the owner's just because its marker is no longer recognised.
 
-GUEST_NAME = os.getenv("RADAR_GUEST", "leonisguest")
+def guest_cookie(expires_at_ms: int, secret: str) -> str:
+    payload = f"{int(time.time() * 1000)}:{expires_at_ms}:guest"
+    digest = hmac_module.new(secret.encode(), payload.encode(), hashlib.sha256).digest()
 
-
-def guest_session() -> httpx.Client | None:
-    """
-    Sign in as the guest, or None if no guest is configured on this site.
-
-    Returns the client already signed in and already open — callers use it
-    directly rather than in a `with`, because entering a client that has served
-    a request raises.
-    """
-    client = httpx.Client(base_url=SITE, timeout=10, follow_redirects=False)
-    client.post("/auth/login", data={"user": GUEST_NAME, "password": ""})
-
-    if "radar_session" not in client.cookies:
-        client.close()
-        return None
-
-    return client
+    return f"{payload}.{base64.urlsafe_b64encode(digest).decode().rstrip('=')}"
 
 
-def guest_is_configured() -> bool:
-    """
-    Runs at import time to decide a skip, so it must survive the site being
-    down — the offline suite collects this file whether or not anything is
-    listening.
-    """
-    if not site_is_up():
-        return False
+@needs_password
+def test_an_old_guest_cookie_grants_nothing() -> None:
+    week = int(time.time() * 1000) + 7 * 24 * 60 * 60 * 1000
+    cookie = guest_cookie(week, share_password())
 
-    try:
-        client = guest_session()
-    except Exception:  # noqa: BLE001
-        return False
+    response = httpx.get(
+        f"{SITE}/api/candidates?limit=1",
+        cookies={"radar_session": cookie},
+        timeout=10,
+    )
 
-    if client is None:
-        return False
-
-    client.close()
-
-    return True
+    assert response.status_code == 401
 
 
-needs_guest = pytest.mark.skipif(
-    not guest_is_configured(), reason="no guest configured on this site"
-)
-
-
-@needs_guest
-def test_a_guest_name_alone_signs_in() -> None:
-    client = guest_session()
-
-    try:
-        assert client.get("/api/health").status_code == 200
-    finally:
-        client.close()
-
-
-@needs_guest
-def test_a_guest_cannot_write() -> None:
-    """
-    The point of the read-only rule: a visitor must not be able to overwrite
-    judgements, or clear the unread marks, on someone else's radar.
-    """
-    client = guest_session()
-
-    try:
-        assert client.post("/api/viewed").status_code == 403
-    finally:
-        client.close()
-
-
-@needs_guest
-def test_a_guest_cannot_spend_money() -> None:
-    """/api/chat calls a paid model on every request."""
-    client = guest_session()
-
-    try:
-        response = client.post("/api/chat", json={"question": "anything"})
-
-        assert response.status_code == 403
-    finally:
-        client.close()
-
-
-@needs_guest
-def test_a_guest_session_carries_its_own_expiry() -> None:
-    """
-    Not the usual fortnight. The cookie must die on the guest's date, so access
-    lapses without anyone remembering to remove it.
-    """
-    client = guest_session()
-
-    try:
-        cookie = next(c for c in client.cookies.jar if c.name == "radar_session")
-
-        assert cookie.expires is not None
-        assert cookie.expires < time.time() + 15 * 24 * 60 * 60
-    finally:
-        client.close()
-
-
-def test_an_unknown_guest_name_does_not_sign_in() -> None:
+def test_a_name_without_a_password_does_not_sign_in() -> None:
     client = httpx.Client(base_url=SITE, timeout=10, follow_redirects=False)
 
     try:
-        client.post("/auth/login", data={"user": "nosuchguest", "password": ""})
+        client.post("/auth/login", data={"user": "leonisguest", "password": ""})
 
         assert "radar_session" not in client.cookies
-    finally:
-        client.close()
-
-
-# --- what a guest cannot reach ---------------------------------------------
-#
-# The judgements are the strategy: which companies were kept, which were passed
-# on, and the reason written beside each. A guest gets the sandbox instead, and
-# these are the tests that say so.
-
-@needs_guest
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/api/candidates",
-        "/api/analysis",
-        "/api/theses",
-        "/api/disagreements",
-        "/api/people",
-        "/api/digests",
-        "/api/meta",
-    ],
-)
-def test_a_guest_cannot_read_the_owners_record(path: str) -> None:
-    client = guest_session()
-
-    try:
-        assert client.get(path).status_code == 403
-    finally:
-        client.close()
-
-
-@needs_guest
-def test_a_guest_is_sent_to_their_own_page() -> None:
-    client = guest_session()
-
-    try:
-        response = client.get("/")
-
-        assert response.status_code in (302, 303, 307)
-        assert "/try" in response.headers["location"]
-    finally:
-        client.close()
-
-
-@needs_guest
-def test_a_guest_can_reach_the_sandbox() -> None:
-    client = guest_session()
-
-    try:
-        assert client.get("/try").status_code == 200
     finally:
         client.close()
 
@@ -417,12 +285,13 @@ def test_a_read_token_cannot_spend_money() -> None:
 
 
 @needs_password
-def test_a_sandbox_token_cannot_read_the_record() -> None:
+def test_an_old_sandbox_token_grants_nothing() -> None:
+    """The sandbox scope is gone, so a correctly signed one is now just invalid."""
     response = httpx.get(
         f"{SITE}/api/candidates?limit=1", headers=bearer("sandbox"), timeout=10
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @needs_password
@@ -435,10 +304,10 @@ def test_an_expired_token_grants_nothing() -> None:
 
 
 @needs_password
-def test_the_scope_cannot_be_edited_by_whoever_holds_the_token() -> None:
-    """Scope is inside the signature, so promoting sandbox to read breaks it."""
-    header = bearer("sandbox")
-    tampered = header["Authorization"].replace(":sandbox:", ":read:")
+def test_the_token_cannot_be_edited_by_whoever_holds_it() -> None:
+    """The name is inside the signature, so renaming the token breaks it."""
+    header = bearer("read", name="friend")
+    tampered = header["Authorization"].replace(":friend:", ":someone:")
 
     response = httpx.get(
         f"{SITE}/api/candidates?limit=1",

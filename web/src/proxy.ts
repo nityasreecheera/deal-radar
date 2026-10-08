@@ -36,26 +36,6 @@ const PASSWORD = process.env.SHARE_PASSWORD;
 // and dated, and the route refuses anything else.
 const OPEN_PATHS = ["/login", "/auth/login", "/auth/logout", "/invite"];
 
-/**
- * What a guest may reach.
- *
- * Everything else is the owner's working record, and the record is the strategy:
- * which companies were kept, which were passed on, and above all the reason
- * written beside each one. A visitor who can scroll that can reconstruct the
- * thesis in an afternoon, which is exactly what showing someone the tool is not
- * supposed to cost.
- *
- * So a guest gets the sandbox instead — their own criteria, run against the same
- * public filings — and nothing that says what anyone else concluded.
- */
-const GUEST_PATHS = ["/try", "/api/try", "/api/health", "/auth/logout"];
-
-function guestMayReach(pathname: string): boolean {
-  return GUEST_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
-}
-
 function unauthorized() {
   return new NextResponse("Authentication required.", {
     status: 401,
@@ -128,21 +108,6 @@ export async function proxy(request: NextRequest) {
     }
 
     return NextResponse.next();
-  }
-
-  if (role === "guest") {
-    if (guestMayReach(pathname)) {
-      return NextResponse.next();
-    }
-
-    // An API call gets a status. A person gets sent to the page that is for
-    // them, rather than a refusal for a page they did not know they were asking
-    // for — following a link into the list should land somewhere useful.
-    if (pathname.startsWith("/api/")) {
-      return new NextResponse("Not available to guests.", { status: 403 });
-    }
-
-    return NextResponse.redirect(new URL("/try", request.url));
   }
 
   if (role === "owner") {

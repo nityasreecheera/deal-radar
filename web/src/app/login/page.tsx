@@ -31,11 +31,6 @@ export default async function LoginPage({
           </p>
         )}
 
-        {/* One form, two ways through it. A guest types the name they were
-            given and leaves the password empty; the owner fills in the
-            password and the name field is ignored. Keeping it to one form
-            means the password manager still sees a normal login, and a guest
-            is never sent to a separate page that advertises guests exist. */}
         <form action="/auth/login" method="post" className="mt-8">
           <input type="hidden" name="next" value={next ?? "/"} />
 
@@ -78,11 +73,6 @@ export default async function LoginPage({
             Sign in
           </button>
         </form>
-
-        <p className="mt-6 text-[0.75rem] text-[var(--color-ink-faint)]">
-          If you were given a guest name, enter it above and leave the password
-          blank. Guest access is read-only and ends on the date you were told.
-        </p>
       </main>
     </Suspense>
   );

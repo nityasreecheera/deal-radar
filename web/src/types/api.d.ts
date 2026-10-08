@@ -57,8 +57,38 @@ export interface paths {
         /**
          * Get Candidates
          * @description Judgements, filtered. Every parameter is optional and combines.
+         *
+         *     `q` is read as a sentence before it is read as words: a stage, a size, a
+         *     domain, a verdict or a date in the text becomes a filter, and only what is
+         *     left over is matched as text. The explicit parameters still win, so a
+         *     dropdown set by hand is never overridden by a word in the box.
          */
         get: operations["get_candidates_api_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/candidates/{accession}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Profile
+         * @description A readable explanation of what a company does.
+         *
+         *     Written on the first request and kept, so a company nobody opens costs
+         *     nothing. If the model cannot be reached the scraped text comes back instead,
+         *     marked as the company's own words — a page that invented a profile when the
+         *     lookup failed would be the mistake this project keeps finding.
+         */
+        get: operations["get_profile_api_candidates__accession__profile_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -76,7 +106,13 @@ export interface paths {
         };
         /**
          * Get One
-         * @description One judgement.
+         * @description One judgement, from a particular domain if one is named.
+         *
+         *     A company can carry a different verdict from each thesis — Cornelis Networks
+         *     fits AI infra and is rejected by AI tools — so a page reached from a
+         *     domain-filtered list has to ask for that domain's answer. Without it the
+         *     most recent judgement is returned, which is whichever thesis happened to run
+         *     last.
          */
         get: operations["get_one_api_candidates__accession__get"];
         put?: never;
@@ -97,8 +133,136 @@ export interface paths {
         /**
          * Get Detail
          * @description One company, with its history and connections.
+         *
+         *     Takes the domain for the same reason as get_one: the verdict and the
+         *     reasoning belong to a thesis, not to the company.
          */
         get: operations["get_detail_api_candidates__accession__detail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/candidates/{accession}/outreach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record One Outreach
+         * @description Note that you contacted a company, or what came of it.
+         *
+         *     Written by a person. Nothing here is inferred from a mailbox, because the
+         *     tool has no access to one — so this records what someone chose to write
+         *     down rather than guessing at what happened.
+         */
+        post: operations["record_one_outreach_api_candidates__accession__outreach_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/theses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Theses
+         * @description Every set of criteria on disk.
+         */
+        get: operations["list_theses_api_theses_get"];
+        /**
+         * Write Thesis
+         * @description Create or replace a set of criteria.
+         *
+         *     The body arrives as a Thesis, so anything malformed is rejected by
+         *     validation before a file is touched. That is the point of the seam: the
+         *     website can change what reaches an inbox, and cannot break the daily run
+         *     by writing something the radar will fail to read tomorrow morning.
+         */
+        put: operations["write_thesis_api_theses_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/theses/{domain}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Thesis
+         * @description Delete a set of criteria.
+         *
+         *     Judgements already made under it are kept. They record what was decided and
+         *     when, and erasing them because the criteria changed would be rewriting
+         *     history to tidy a menu.
+         */
+        delete: operations["remove_thesis_api_theses__domain__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Analysis
+         * @description Everything the analysis page shows.
+         *
+         *     The source table is the one that pays for itself: the SEC industry group is
+         *     the only thing known before a company costs anything to look up, so a group
+         *     with no fits is a line you can delete from config/thesis.yaml.
+         */
+        get: operations["get_analysis_api_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Categories
+         * @description What kinds of company you are actually seeing, commonest first.
+         *
+         *     The rejection counts are the useful half. A category you have turned down
+         *     four times belongs in config/thesis.yaml, where it costs nothing, rather
+         *     than arriving every morning and being looked up at your expense.
+         */
+        get: operations["list_categories_api_categories_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -170,6 +334,52 @@ export interface paths {
          *     about the research.
          */
         post: operations["mark_one_viewed_api_candidates__accession__viewed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/candidates/{accession}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record One Decision
+         * @description Save what the analyst thinks, overriding the model.
+         *
+         *     The model's verdict is left exactly where it is. This writes alongside it, so
+         *     rejudging cannot wipe a human decision and the two stay comparable.
+         */
+        post: operations["record_one_decision_api_candidates__accession__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/disagreements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Disagreements
+         * @description Where the analyst overruled the model.
+         *
+         *     A long list is a signal that the thesis file does not say what the analyst
+         *     means, which is a config problem rather than a code one.
+         */
+        get: operations["list_disagreements_api_disagreements_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -268,6 +478,50 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * Analysis
+         * @description The whole picture, rather than one company at a time.
+         *
+         *     Assembled in one response because the page shows them together and three
+         *     round trips to draw one screen is three chances to render half a page.
+         */
+        Analysis: {
+            /**
+             * Judged
+             * @default 0
+             */
+            judged: number;
+            /** Domains */
+            domains?: components["schemas"]["DomainRow"][];
+            market?: components["schemas"]["Market"];
+            /** Subdomains */
+            subdomains?: {
+                [key: string]: unknown;
+            }[];
+            /** Categories */
+            categories?: components["schemas"]["CategoryRow"][];
+            /** Sources */
+            sources?: components["schemas"]["SourceRow"][];
+            /** Round Age */
+            round_age?: {
+                [key: string]: number;
+            };
+            /** Overrides */
+            overrides?: components["schemas"]["StoredCandidate"][];
+            /**
+             * Clusters
+             * @default
+             */
+            clusters: string;
+        };
+        /**
+         * Assessment
+         * @description What the filings say is true of a company, and what they say is not.
+         */
+        Assessment: {
+            /** Signals */
+            signals?: components["schemas"]["Signal"][];
+        };
+        /**
          * CandidateList
          * @description A filtered page of judgements.
          */
@@ -278,6 +532,45 @@ export interface components {
             unread: number;
             /** Candidates */
             candidates?: components["schemas"]["StoredCandidate"][];
+            /** Reading */
+            reading?: string[];
+            /** Unsupported */
+            unsupported?: string[];
+        };
+        /** CategoryRow */
+        CategoryRow: {
+            /** Category */
+            category: string;
+            /**
+             * Seen
+             * @default 0
+             */
+            seen: number;
+            /**
+             * Rejected
+             * @default 0
+             */
+            rejected: number;
+            /**
+             * Fitted
+             * @default 0
+             */
+            fitted: number;
+        };
+        /** CategorySliceRow */
+        CategorySliceRow: {
+            /** Category */
+            category: string;
+            /**
+             * Seen
+             * @default 0
+             */
+            seen: number;
+            /**
+             * Fitted
+             * @default 0
+             */
+            fitted: number;
         };
         /**
          * ChatAnswer
@@ -327,8 +620,78 @@ export interface components {
              * @default
              */
             progress_note: string;
+            /** Days Open */
+            days_open?: number | null;
+            /**
+             * Age Note
+             * @default
+             */
+            age_note: string;
+            /** Minimum Note */
+            minimum_note?: string | null;
+            /** Category */
+            category?: string | null;
+            /**
+             * Category Note
+             * @default
+             */
+            category_note: string;
+            assessment?: components["schemas"]["Assessment"];
+            /** Researchers */
+            researchers?: components["schemas"]["Researcher"][];
+            /** Compose Url */
+            compose_url?: string | null;
+            /** Gmail Search Url */
+            gmail_search_url?: string | null;
             /** Shared People */
             shared_people?: components["schemas"]["PersonLink"][];
+        };
+        /**
+         * CompanyExplanation
+         * @description A written explanation of a company, or the reason there isn't one.
+         */
+        CompanyExplanation: {
+            /** Accession */
+            accession: string;
+            /** Profile */
+            profile?: string | null;
+            /** Fallback */
+            fallback?: string | null;
+            /** Unavailable */
+            unavailable?: string | null;
+        };
+        /** DealSizesRow */
+        DealSizesRow: {
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Median */
+            median?: number | null;
+            /** Lower Quartile */
+            lower_quartile?: number | null;
+            /** Upper Quartile */
+            upper_quartile?: number | null;
+            /** Smallest */
+            smallest?: number | null;
+            /** Largest */
+            largest?: number | null;
+        };
+        /**
+         * Decision
+         * @description The analyst's own call on a company.
+         */
+        Decision: {
+            /** Verdict */
+            verdict?: ("fits" | "maybe" | "unknown" | "no_fit") | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Clear Verdict
+             * @default false
+             */
+            clear_verdict: boolean;
         };
         /**
          * DigestBody
@@ -339,6 +702,39 @@ export interface components {
             date: string;
             /** Markdown */
             markdown: string;
+        };
+        /** DomainRow */
+        DomainRow: {
+            /** Domain */
+            domain: string;
+            /**
+             * Judged
+             * @default 0
+             */
+            judged: number;
+            /**
+             * Fitted
+             * @default 0
+             */
+            fitted: number;
+            /**
+             * Rejected
+             * @default 0
+             */
+            rejected: number;
+            /**
+             * Unknown
+             * @default 0
+             */
+            unknown: number;
+            /** Latest Filing */
+            latest_filing?: string | null;
+            /** Typical Raise */
+            typical_raise?: number | null;
+            /** Lower Quartile */
+            lower_quartile?: number | null;
+            /** Upper Quartile */
+            upper_quartile?: number | null;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -385,6 +781,35 @@ export interface components {
             marked: number;
         };
         /**
+         * Market
+         * @description What the filings say about the market, rather than about the radar.
+         */
+        Market: {
+            /**
+             * Companies
+             * @default 0
+             */
+            companies: number;
+            /**
+             * Excluded
+             * @default 0
+             */
+            excluded: number;
+            deal_sizes?: components["schemas"]["DealSizesRow"];
+            /** By Category */
+            by_category?: {
+                [key: string]: components["schemas"]["DealSizesRow"];
+            };
+            /** Company Age */
+            company_age?: {
+                [key: string]: number;
+            };
+            /** Locations */
+            locations?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
          * Meta
          * @description Everything the interface chrome needs, in one request.
          */
@@ -407,6 +832,16 @@ export interface components {
             thesis_name?: string | null;
             /** Digest Dates */
             digest_dates?: string[];
+        };
+        /**
+         * Outreach
+         * @description What a person wants recorded about contacting a company.
+         */
+        Outreach: {
+            /** Status */
+            status?: string | null;
+            /** Email */
+            email?: string | null;
         };
         /**
          * PersonLink
@@ -457,6 +892,93 @@ export interface components {
             state?: string | null;
         };
         /**
+         * Researcher
+         * @description An academic record that might belong to somebody on a filing.
+         */
+        Researcher: {
+            /** Name */
+            name: string;
+            /**
+             * Openalex Id
+             * @default
+             */
+            openalex_id: string;
+            /**
+             * Works
+             * @default 0
+             */
+            works: number;
+            /**
+             * Citations
+             * @default 0
+             */
+            citations: number;
+            /**
+             * Institution
+             * @default
+             */
+            institution: string;
+            /** Topics */
+            topics?: string[];
+            /**
+             * Plausible
+             * @default false
+             */
+            plausible: boolean;
+        };
+        /**
+         * Signal
+         * @description One checkable thing, and what its presence suggests.
+         */
+        Signal: {
+            /** Name */
+            name: string;
+            /** Weight */
+            weight: number;
+            /**
+             * Fired
+             * @default false
+             */
+            fired: boolean;
+            /**
+             * Means
+             * @default
+             */
+            means: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        };
+        /** SourceRow */
+        SourceRow: {
+            /** Industry Group */
+            industry_group: string;
+            /**
+             * Seen
+             * @default 0
+             */
+            seen: number;
+            /**
+             * Fitted
+             * @default 0
+             */
+            fitted: number;
+            /**
+             * Rejected
+             * @default 0
+             */
+            rejected: number;
+            /**
+             * Not Healthcare
+             * @default 0
+             */
+            not_healthcare: number;
+            /** Breakdown */
+            breakdown?: components["schemas"]["CategorySliceRow"][];
+        };
+        /**
          * StoredCandidate
          * @description A judgement as it comes back out of the database.
          */
@@ -476,6 +998,8 @@ export interface components {
             reason: string;
             /** Summary */
             summary?: string | null;
+            /** Category */
+            category?: string | null;
             /** Website */
             website?: string | null;
             /** Description */
@@ -498,18 +1022,98 @@ export interface components {
             theme?: string | null;
             /** Viewed At */
             viewed_at?: string | null;
+            /** User Verdict */
+            user_verdict?: ("fits" | "maybe" | "unknown" | "no_fit") | null;
+            /** User Note */
+            user_note?: string | null;
+            /** Profile */
+            profile?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
             /** People */
             people?: components["schemas"]["RelatedPerson"][];
             /** Amount Sold */
             amount_sold?: number | null;
             /** Investor Count */
             investor_count?: number | null;
+            /** Minimum Investment */
+            minimum_investment?: number | null;
+            /** First Sale Date */
+            first_sale_date?: string | null;
+            /** Contact Email */
+            contact_email?: string | null;
+            /** Outreach Status */
+            outreach_status?: string | null;
+            /** Outreach At */
+            outreach_at?: string | null;
             /** Jurisdiction */
             jurisdiction?: string | null;
             /** Entity Type */
             entity_type?: string | null;
             /** Cik */
             cik?: string | null;
+            /**
+             * Effective Verdict
+             * @description What this company counts as. The human's call wins.
+             * @enum {string}
+             */
+            readonly effective_verdict: "fits" | "maybe" | "unknown" | "no_fit";
+            /**
+             * Overridden
+             * @description Whether the analyst disagreed with the model. Worth surfacing.
+             */
+            readonly overridden: boolean;
+        };
+        /**
+         * Thesis
+         * @description What the radar is looking for.
+         */
+        Thesis: {
+            /** Domain */
+            domain: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Include */
+            include: string[];
+            /** Exclude */
+            exclude?: string[];
+            filters?: components["schemas"]["ThesisFilters"];
+            /** Sec Industry Groups */
+            sec_industry_groups?: string[];
+        };
+        /**
+         * ThesisEdit
+         * @description A set of criteria as the browser sends it back.
+         */
+        ThesisEdit: {
+            thesis: components["schemas"]["Thesis"];
+            /** Original Domain */
+            original_domain?: string | null;
+        };
+        /**
+         * ThesisFilters
+         * @description Deterministic rules that need no model and no network.
+         */
+        ThesisFilters: {
+            /**
+             * Min Offering Amount
+             * @default 0
+             */
+            min_offering_amount: number;
+            /**
+             * Exclude Amendments
+             * @default true
+             */
+            exclude_amendments: boolean;
+            /** Exclude Name Patterns */
+            exclude_name_patterns?: string[];
+            /**
+             * Require Disclosed Amount
+             * @default false
+             */
+            require_disclosed_amount: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -583,6 +1187,7 @@ export interface operations {
                 since?: string | null;
                 until?: string | null;
                 unread_only?: boolean;
+                q?: string;
                 limit?: number;
             };
             header?: never;
@@ -611,9 +1216,42 @@ export interface operations {
             };
         };
     };
-    get_one_api_candidates__accession__get: {
+    get_profile_api_candidates__accession__profile_get: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                accession: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyExplanation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_one_api_candidates__accession__get: {
+        parameters: {
+            query?: {
+                theme?: string | null;
+            };
             header?: never;
             path: {
                 accession: string;
@@ -653,7 +1291,9 @@ export interface operations {
     };
     get_detail_api_candidates__accession__detail_get: {
         parameters: {
-            query?: never;
+            query?: {
+                theme?: string | null;
+            };
             header?: never;
             path: {
                 accession: string;
@@ -678,6 +1318,210 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_one_outreach_api_candidates__accession__outreach_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accession: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Outreach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredCandidate"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_theses_api_theses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thesis"][];
+                };
+            };
+        };
+    };
+    write_thesis_api_theses_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThesisEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Thesis"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_thesis_api_theses__domain__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_analysis_api_analysis_get: {
+        parameters: {
+            query?: {
+                theme?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Analysis"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_categories_api_categories_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+                theme?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
             /** @description Validation Error */
@@ -782,6 +1626,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_one_decision_api_candidates__accession__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accession: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Decision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredCandidate"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_disagreements_api_disagreements_get: {
+        parameters: {
+            query?: {
+                theme?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredCandidate"][];
                 };
             };
             /** @description Validation Error */
