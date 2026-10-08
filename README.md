@@ -5,6 +5,31 @@ that you've never seen before, filtered down to the ones worth your time.
 
 Not a database and not a search tool. It's a filter that remembers.
 
+## About this project
+
+A working tool, not a demo. It runs on a schedule against live SEC filings and
+emails its results every weekday.
+
+**Stack:** Python (FastAPI, Pydantic, SQLite) for the pipeline and API, Next.js and
+TypeScript for the site, cron on an Oracle Cloud VM, published through Tailscale
+Funnel. Any OpenAI-compatible model does the judging; Tavily does the web search.
+
+What's worth a look if you're reading the code:
+
+- **It never invents an answer.** A malformed model reply or a failed lookup is
+  recorded as a problem and retried the next day. It is never turned into a
+  verdict, and the company is not marked as seen.
+- **The categories came from the data.** `unknown` exists separately from `maybe`
+  because twelve of the first twenty maybes turned out to mean "couldn't find out."
+- **Your judgement overrides the model's, and both are kept,** so how often you
+  disagree with it is a number rather than a feeling.
+- **Access without accounts.** Invite links and read-only API tokens are signed
+  and expire on their own. Nothing is stored server-side.
+- **444 tests that run offline.**
+
+[DEVELOPING.md](DEVELOPING.md) covers the architecture and, more usefully, the
+things real filings forced me to change.
+
 ## What you actually get
 
 One email, around 5am. Usually four or five names. Each one has what the company
@@ -164,7 +189,7 @@ problem.
 ## Where it honestly stands
 
 It runs end to end against live filings, on a schedule, and emails the result.
-258 tests, none of which touch the network.
+444 tests that run offline.
 
 **The thesis is still a placeholder.** The criteria it currently judges against are
 a reasonable guess and nothing more — healthcare AI and clinical software, with a
@@ -176,8 +201,7 @@ what rules a company out in the first thirty seconds. That comes from a conversa
 not from writing more code. It's one config file to change, and it's the change that
 decides whether any of this is useful.
 
-Known rough edges: only one domain is configured, and Slack delivery exists in
-the code but has never been run.
+Known rough edges: Slack delivery exists in the code but has never been run.
 
 ---
 
