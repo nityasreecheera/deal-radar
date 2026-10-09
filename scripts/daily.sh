@@ -49,6 +49,21 @@ if [ "${RADAR_SEND:-0}" = "1" ]; then
   ARGS+=(--send)
 fi
 
+# Store every Form D first, so a domain run from the website can look back
+# further than this morning's window. It judges nothing and costs nothing. A
+# failure is logged and the radar runs anyway: the archive is for later, and
+# today's digest must not depend on it.
+log "START archive"
+
+if ARCHIVE=$("$PROJECT/.venv/bin/python" -m src.cli archive --days 3 2>&1); then
+  echo "$ARCHIVE" >> "$LOG"
+  log "OK archive"
+else
+  archive_status=$?
+  echo "$ARCHIVE" >> "$LOG"
+  log "INCOMPLETE archive exit=$archive_status — the radar runs regardless"
+fi
+
 log "START ${ARGS[*]}"
 
 # stdout is the digest, stderr is the commentary. Both go to the log, but the

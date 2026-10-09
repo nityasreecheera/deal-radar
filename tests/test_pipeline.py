@@ -9,6 +9,7 @@ from src.enrich import Enrichment
 from src.judge import JudgementError
 from src.edgar import SearchOutcome
 from src.models import Candidate, FormDFiling
+import src.pipeline as pipeline_module
 from src.pipeline import default_window, run_radar
 from src.seen import connect, count_seen, mark_seen, mark_seen_for_theme
 from src.thesis import Thesis
@@ -38,6 +39,17 @@ def thesis() -> Thesis:
             "filters": {"min_offering_amount": 500_000},
         }
     )
+
+
+@pytest.fixture(autouse=True)
+def offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    A company that fits has its funding history fetched from EDGAR.
+
+    Left in place, every test that judges something "fits" made real requests
+    and passed either way, because a failed history is only a problem line.
+    """
+    monkeypatch.setattr(pipeline_module, "fetch_history", lambda cik: [])
 
 
 @pytest.fixture

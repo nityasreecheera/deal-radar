@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { RunNow } from "@/components/RunNow";
 import { type Thesis } from "@/lib/api";
 
 /**
@@ -123,7 +124,8 @@ export default function CriteriaPage() {
           <p className="mt-3 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
             What each domain looks for. These decide what reaches your inbox
             tomorrow morning, so changes take effect on the next run — there is
-            nothing to retrain and no model involved.
+            nothing to retrain and no model involved. Run now to try a change
+            on past filings instead of waiting.
           </p>
         </div>
       </header>
@@ -204,12 +206,21 @@ function Summary({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const [running, setRunning] = useState(false);
+
   return (
     <section className="border-t-2 border-[var(--color-ink)] pt-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
         <h2 className="font-display text-[1.125rem]">{thesis.domain}</h2>
 
         <div className="flex items-baseline gap-4 text-[0.8125rem]">
+          <button
+            type="button"
+            onClick={() => setRunning(true)}
+            className="text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+          >
+            Run now
+          </button>
           <button
             type="button"
             onClick={onEdit}
@@ -263,6 +274,8 @@ function Summary({
           ${(thesis.filters?.min_offering_amount ?? 0).toLocaleString()}
         </span>
       </p>
+
+      {running && <RunNow domain={thesis.domain} onClose={() => setRunning(false)} />}
     </section>
   );
 }

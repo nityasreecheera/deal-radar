@@ -323,6 +323,36 @@ def test_a_failing_later_page_keeps_the_earlier_results() -> None:
     assert any("stopped at offset" in problem for problem in problems)
 
 
+def test_paging_advances_by_the_size_of_the_page_returned() -> None:
+    # EDGAR returns a hundred results a page. Stepping by any other number
+    # either skips results or asks for the same ones again.
+    offsets: list[int] = []
+
+    def fake_fetch(url: str) -> str:
+        if url.startswith("https://efts.sec.gov"):
+            offset = int(url.split("from=")[1].split("&")[0]) if "from=" in url else 0
+            offsets.append(offset)
+            hits = [
+                {
+                    "_id": f"0000000001-26-{n:06d}:primary_doc.xml",
+                    "_source": {"ciks": ["1"], "file_date": "2026-07-27"},
+                }
+                for n in range(offset, min(offset + 100, 250))
+            ]
+
+            return json.dumps({"hits": {"total": {"value": 250}, "hits": hits}})
+
+        return real_filing_xml()
+
+    from src.edgar import search_industry
+
+    results, problems = search_industry(None, "2026-07-27", "2026-07-27", fake_fetch, max_results=1000)
+
+    assert offsets == [0, 100, 200]
+    assert len({r["accession"] for r in results}) == 250
+    assert problems == []
+
+
 def test_a_failing_first_page_loses_only_that_group() -> None:
     def fake_fetch(url: str) -> str:
         if "Biotechnology" in url:

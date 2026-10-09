@@ -36,7 +36,6 @@ DEFAULT_USER_AGENT = os.getenv(
 # nothing to gain by going faster and a block would cost a day of data.
 REQUEST_DELAY_SECONDS = 0.2
 
-SEARCH_PAGE_SIZE = 10
 
 # EDGAR's search endpoint fails intermittently under load — whole days of runs
 # have come back with 500 on every category and then worked by hand minutes
@@ -138,7 +137,7 @@ def create_fetcher(
 
 
 def build_search_url(
-    industry_group: str,
+    industry_group: str | None,
     start_date: str,
     end_date: str,
     offset: int = 0,
@@ -150,13 +149,17 @@ def build_search_url(
     inside each filing's XML. That is what makes filtering free — no filing has
     to be downloaded to discover whether it is relevant. The quotes must survive
     encoding, or the search matches each word separately and returns everything.
+
+    No group means every Form D in the range, which is what the archive wants.
     """
     params: dict[str, str | int] = {
-        "q": f'"{industry_group}"',
         "forms": "D",
         "startdt": start_date,
         "enddt": end_date,
     }
+
+    if industry_group is not None:
+        params = {"q": f'"{industry_group}"', **params}
 
     if offset:
         params["from"] = offset
@@ -439,7 +442,7 @@ def parse_form_d(
 
 
 def search_industry(
-    industry_group: str,
+    industry_group: str | None,
     start_date: str,
     end_date: str,
     fetch: Fetcher,
@@ -456,10 +459,15 @@ def search_industry(
 
     A failure on the *first* page is different — there is nothing to salvage, so
     that raises.
+
+    Stopping at `max_results` while EDGAR still has more is reported too. A cap
+    reached quietly reads exactly like a day with nothing else filed.
     """
+    label = industry_group or "all Form D"
     collected: list[dict[str, str]] = []
     problems: list[str] = []
     offset = 0
+    total = 0
 
     while offset < max_results:
         url = build_search_url(industry_group, start_date, end_date, offset)
@@ -471,7 +479,7 @@ def search_industry(
                 raise
 
             problems.append(
-                f"search '{industry_group}' stopped at offset {offset}: {exc}"
+                f"search '{label}' stopped at offset {offset}: {exc}"
             )
             break
         except json.JSONDecodeError as exc:
@@ -481,7 +489,7 @@ def search_industry(
                 ) from exc
 
             problems.append(
-                f"search '{industry_group}' returned invalid JSON at "
+                f"search '{label}' returned invalid JSON at "
                 f"offset {offset}"
             )
             break
@@ -490,12 +498,20 @@ def search_industry(
         collected.extend(page)
 
         total = total_hits(payload)
-        offset += SEARCH_PAGE_SIZE
+
+        # Advance by what actually came back. EDGAR returns a hundred a page;
+        # stepping by a guessed ten asked for every page ten times over.
+        offset += len(page)
 
         if not page or offset >= total:
             break
 
         time.sleep(REQUEST_DELAY_SECONDS)
+
+    if offset >= max_results and total > max_results:
+        problems.append(
+            f"search '{label}' stopped at the cap of {max_results} of {total} results"
+        )
 
     return collected[:max_results], problems
 
@@ -522,7 +538,7 @@ class SearchOutcome(NamedTuple):
 def fetch_filings(
     start_date: str,
     end_date: str,
-    industry_groups: list[str] | tuple[str, ...] = SEC_HEALTHCARE_GROUPS,
+    industry_groups: list[str] | tuple[str, ...] | None = SEC_HEALTHCARE_GROUPS,
     fetch: Fetcher | None = None,
     max_per_group: int = 200,
 ) -> SearchOutcome:
@@ -537,6 +553,8 @@ def fetch_filings(
     Each industry group is searched separately rather than with one broad query,
     because a filing states exactly one group and precise matching avoids
     downloading filings that were never relevant.
+
+    `industry_groups=None` is the broad query: every Form D, whatever its group.
     """
     fetcher = fetch or create_fetcher()
 
@@ -546,7 +564,13 @@ def fetch_filings(
     filings: list[FormDFiling] = []
     seen_accessions: set[str] = set()
 
-    for group in industry_groups:
+    groups: list[str | None] = (
+        [None] if industry_groups is None else list(industry_groups)
+    )
+
+    for group in groups:
+        label = group or "all Form D"
+
         try:
             results, page_problems = search_industry(
                 group,
@@ -556,12 +580,12 @@ def fetch_filings(
                 max_results=max_per_group,
             )
             problems.extend(page_problems)
-            searched.append(group)
+            searched.append(label)
         except EdgarError as exc:
             # One unreachable industry group must not lose the other six, but it
             # does mean this category went unread today.
-            problems.append(f"search '{group}': {exc}")
-            unsearched.append(group)
+            problems.append(f"search '{label}': {exc}")
+            unsearched.append(label)
             continue
 
         for result in results:
@@ -587,8 +611,9 @@ def fetch_filings(
 
             # The search matched on a phrase inside the document, which can hit
             # a filing whose stated group is something else. Trust the parsed
-            # field over the search match.
-            if filing.in_groups(industry_groups):
+            # field over the search match. The broad query asked for everything,
+            # so there is nothing to check it against.
+            if industry_groups is None or filing.in_groups(industry_groups):
                 filings.append(filing)
 
             time.sleep(REQUEST_DELAY_SECONDS)

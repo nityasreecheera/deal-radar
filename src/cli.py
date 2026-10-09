@@ -8,6 +8,7 @@ import sys
 from contextlib import closing
 from pathlib import Path
 
+from src.archive import archive_range
 from src.candidates import (
     count_by_verdict,
     find_by_company,
@@ -306,6 +307,35 @@ def command_set_domain(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_archive(args: argparse.Namespace) -> int:
+    """
+    Store every Form D filed in a range, in every industry group.
+
+    Nothing is looked up or judged, so this costs nothing but time: one search
+    page per ten filings and one download per filing, at EDGAR's polite rate.
+    Prints one line per day and exits non-zero if any day was not read in full,
+    so a scheduled run that half-failed is visible in the log.
+    """
+    if args.start and args.end:
+        start, end = args.start, args.end
+    else:
+        start, end = default_window(days=args.days)
+
+    with closing(connect(Path(args.db) if args.db else None)) as connection:
+        run = archive_range(connection, start, end)
+
+    for day in run.days:
+        state = "complete" if day.complete else f"INCOMPLETE ({len(day.problems)} problems)"
+        print(f"{day.day}  {day.filings:4} filings  {state}")
+
+        for problem in day.problems[:5]:
+            print(f"    {problem}")
+
+    print(f"{run.filings} filings stored across {len(run.days)} days")
+
+    return 1 if run.incomplete else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python3 -m src.cli",
@@ -358,6 +388,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="deliver via Slack instead of trying email first",
     )
     run_parser.set_defaults(handler=command_run)
+
+    archive_parser = subparsers.add_parser(
+        "archive",
+        help="store every Form D in a range, without judging any of them",
+    )
+    archive_parser.add_argument("--start", help="start date, YYYY-MM-DD")
+    archive_parser.add_argument("--end", help="end date, YYYY-MM-DD")
+    archive_parser.add_argument(
+        "--days",
+        type=int,
+        default=3,
+        help="window size when no dates are given (default: 3, to cover weekends)",
+    )
+    archive_parser.add_argument("--db", help="path to the seen-index")
+    archive_parser.set_defaults(handler=command_archive)
 
     status_parser = subparsers.add_parser(
         "status",

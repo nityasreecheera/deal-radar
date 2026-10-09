@@ -154,6 +154,63 @@ CREATE TABLE IF NOT EXISTS funding_round (
     is_amendment    INTEGER NOT NULL DEFAULT 0,
     fetched_at      TEXT NOT NULL
 );
+
+-- Every Form D EDGAR published, in every industry group, judged or not.
+--
+-- The daily run searches only the groups some domain asks for, so a domain
+-- added today could see three days back and no further. Keeping everything is
+-- free and small, and it means a new domain, or a corrected one, can be run
+-- against months of filings without asking EDGAR again.
+--
+-- The parsed filing is kept whole as JSON, so nothing has to be re-read from
+-- EDGAR to judge it later. The columns beside it are there to query on.
+CREATE TABLE IF NOT EXISTS archived_filing (
+    accession       TEXT PRIMARY KEY,
+    cik             TEXT NOT NULL,
+    company_name    TEXT NOT NULL,
+    filed_date      TEXT NOT NULL,
+    industry_group  TEXT NOT NULL,
+    is_fund         INTEGER NOT NULL DEFAULT 0,
+    is_amendment    INTEGER NOT NULL DEFAULT 0,
+    offering_amount INTEGER,
+    filing          TEXT NOT NULL,   -- FormDFiling as JSON
+    archived_at     TEXT NOT NULL
+);
+
+-- Which days the archive has actually read, and whether it read all of them.
+--
+-- An empty day and an unread day hold the same number of rows. Without this a
+-- run against the archive could not tell "nothing was filed" from "nobody
+-- looked", which is the distinction this project keeps having to protect.
+CREATE TABLE IF NOT EXISTS archived_day (
+    day         TEXT PRIMARY KEY,
+    filings     INTEGER NOT NULL,
+    problems    INTEGER NOT NULL,
+    complete    INTEGER NOT NULL,
+    archived_at TEXT NOT NULL
+);
+
+-- A run asked for from the website rather than by the schedule.
+--
+-- Kept as a row rather than held in memory because it outlives the request
+-- that started it: the page polls for the result, and a restart mid-run has to
+-- leave something saying the run did not finish.
+CREATE TABLE IF NOT EXISTS manual_run (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    theme        TEXT NOT NULL,
+    start_date   TEXT NOT NULL,
+    end_date     TEXT NOT NULL,
+    cap          INTEGER NOT NULL,
+    status       TEXT NOT NULL,   -- running, done, failed
+    requested_at TEXT NOT NULL,
+    finished_at  TEXT,
+    judged       INTEGER NOT NULL DEFAULT 0,
+    fits         INTEGER NOT NULL DEFAULT 0,
+    maybe        INTEGER NOT NULL DEFAULT 0,
+    unexamined   INTEGER NOT NULL DEFAULT 0,
+    problems     TEXT,            -- JSON array
+    message      TEXT
+);
 """
 
 SCHEMA_INDEXES = """
@@ -171,6 +228,9 @@ CREATE INDEX IF NOT EXISTS idx_candidate_viewed ON candidate (viewed_at);
 
 CREATE INDEX IF NOT EXISTS idx_person_name ON person (name_key);
 CREATE INDEX IF NOT EXISTS idx_funding_cik ON funding_round (cik, filed_date);
+
+CREATE INDEX IF NOT EXISTS idx_archive_group
+    ON archived_filing (industry_group, filed_date);
 """
 
 
@@ -352,7 +412,9 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     location = db_path or DEFAULT_DB_PATH
     location.parent.mkdir(parents=True, exist_ok=True)
 
-    connection = sqlite3.connect(location)
+    # A run started from the website can be writing while the schedule or a
+    # page request is, so a busy database is waited on rather than refused.
+    connection = sqlite3.connect(location, timeout=30)
     connection.row_factory = sqlite3.Row
 
     # Order is deliberate: an index cannot be built on a column that migration
