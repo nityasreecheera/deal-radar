@@ -9,6 +9,7 @@ the radar produced.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from collections import deque
 from contextlib import closing
@@ -59,6 +60,17 @@ from src.profile import Unavailable as ProfileUnavailable
 from src.profile import tidy, write_profile
 from src.query import parse_query
 from src.research import Researcher
+from src.runs import (
+    ManualRun,
+    RunInProgress,
+    RunPreview,
+    RunRequest,
+    execute_run,
+    get_run,
+    preview,
+    recent_runs,
+    start_run,
+)
 from src.signals import Assessment, assess
 from src.people import PersonLink, most_connected, shared_people
 from src.seen import connect, count_seen
@@ -660,6 +672,136 @@ def remove_thesis(domain: str) -> dict:
         ).fetchone()["n"]
 
     return {"deleted": domain, "judgements_kept": kept}
+
+
+def find_thesis(domain: str) -> Thesis:
+    """The criteria for one domain, or a 404 naming it."""
+    for thesis in load_all_theses():
+        if thesis.domain == domain:
+            return thesis
+
+    raise HTTPException(
+        status_code=404,
+        detail={"ok": False, "errors": [f"no criteria for {domain!r}"]},
+    )
+
+
+def invalid(exc: ValueError) -> HTTPException:
+    """A rejected run request, worded the way the page shows errors."""
+    errors = getattr(exc, "errors", None)
+    message = errors()[0]["msg"].removeprefix("Value error, ") if errors else str(exc)
+
+    return HTTPException(status_code=422, detail={"ok": False, "errors": [message]})
+
+
+class RunBody(BaseModel):
+    """
+    A run as the page asks for it.
+
+    Checked by RunRequest rather than here, so the rules — dates in order, not
+    in the future, under the cap — read the same whether a preview or a run is
+    being asked for, and fail with the same wording.
+    """
+
+    start_date: str
+    end_date: str
+    cap: int | None = None
+
+
+def launch(run: ManualRun, thesis: Thesis) -> None:
+    """
+    Start a run on a thread of its own and return at once.
+
+    Judging a hundred companies takes minutes, far longer than the proxy in
+    front of this will hold a request open. The page polls for the result.
+    A seam of its own so the tests can run it inline.
+    """
+    threading.Thread(target=execute_run, args=(run.id, thesis), daemon=True).start()
+
+
+@app.get(
+    "/api/theses/{domain}/run-preview",
+    response_model=RunPreview,
+    responses={404: {"model": ErrorBody}, 422: {"model": ErrorBody}},
+)
+def preview_run(
+    domain: str,
+    start_date: str,
+    end_date: str,
+    cap: int | None = None,
+) -> RunPreview:
+    """What running this domain over the range now would judge and spend."""
+    thesis = find_thesis(domain)
+
+    try:
+        request = RunRequest(
+            start_date=start_date,
+            end_date=end_date,
+            **({"cap": cap} if cap is not None else {}),
+        )
+    except ValueError as exc:
+        raise invalid(exc) from exc
+
+    with closing(connect()) as connection:
+        return preview(connection, thesis, request)
+
+
+@app.post(
+    "/api/theses/{domain}/runs",
+    response_model=ManualRun,
+    status_code=202,
+    responses={
+        404: {"model": ErrorBody},
+        409: {"model": ErrorBody},
+        422: {"model": ErrorBody},
+    },
+)
+def run_now(domain: str, body: RunBody) -> ManualRun:
+    """
+    Run one domain over a range of the archive, now.
+
+    Returns as soon as the run has started. It spends money, so it is capped
+    and refused while another run is still going.
+    """
+    thesis = find_thesis(domain)
+
+    try:
+        request = RunRequest(**body.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise invalid(exc) from exc
+
+    with closing(connect()) as connection:
+        try:
+            run = start_run(connection, thesis, request)
+        except RunInProgress as exc:
+            raise HTTPException(
+                status_code=409, detail={"ok": False, "errors": [str(exc)]}
+            ) from exc
+
+    launch(run, thesis)
+
+    return run
+
+
+@app.get("/api/runs", response_model=list[ManualRun])
+def list_runs(limit: int = Query(default=10, ge=1, le=100)) -> list[ManualRun]:
+    """Recent runs started from the website, newest first."""
+    with closing(connect()) as connection:
+        return recent_runs(connection, limit=limit)
+
+
+@app.get("/api/runs/{run_id}", response_model=ManualRun, responses={404: {"model": ErrorBody}})
+def read_run(run_id: int) -> ManualRun:
+    """One run, for the page to poll until it finishes."""
+    with closing(connect()) as connection:
+        run = get_run(connection, run_id)
+
+    if run is None:
+        raise HTTPException(
+            status_code=404, detail={"ok": False, "errors": [f"no run {run_id}"]}
+        )
+
+    return run
 
 
 @app.get("/api/analysis", response_model=Analysis)

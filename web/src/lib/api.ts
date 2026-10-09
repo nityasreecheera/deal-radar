@@ -14,6 +14,8 @@ export type Analysis = Schemas["Analysis"];
 export type Thesis = Schemas["Thesis"];
 export type Market = Schemas["Market"];
 export type DealSizes = Schemas["DealSizesRow"];
+export type RunPreview = Schemas["RunPreview"];
+export type ManualRun = Schemas["ManualRun"];
 export type Verdict = Candidate["verdict"];
 
 export const VERDICTS: Verdict[] = ["fits", "maybe", "unknown", "no_fit"];

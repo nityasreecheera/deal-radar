@@ -223,6 +223,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/theses/{domain}/run-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Run
+         * @description What running this domain over the range now would judge and spend.
+         */
+        get: operations["preview_run_api_theses__domain__run_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/theses/{domain}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Now
+         * @description Run one domain over a range of the archive, now.
+         *
+         *     Returns as soon as the run has started. It spends money, so it is capped
+         *     and refused while another run is still going.
+         */
+        post: operations["run_now_api_theses__domain__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Runs
+         * @description Recent runs started from the website, newest first.
+         */
+        get: operations["list_runs_api_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Run
+         * @description One run, for the page to poll until it finishes.
+         */
+        get: operations["read_run_api_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analysis": {
         parameters: {
             query?: never;
@@ -772,6 +855,49 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** ManualRun */
+        ManualRun: {
+            /** Id */
+            id: number;
+            /** Theme */
+            theme: string;
+            /** Start Date */
+            start_date: string;
+            /** End Date */
+            end_date: string;
+            /** Cap */
+            cap: number;
+            /** Status */
+            status: string;
+            /** Requested At */
+            requested_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /**
+             * Judged
+             * @default 0
+             */
+            judged: number;
+            /**
+             * Fits
+             * @default 0
+             */
+            fits: number;
+            /**
+             * Maybe
+             * @default 0
+             */
+            maybe: number;
+            /**
+             * Unexamined
+             * @default 0
+             */
+            unexamined: number;
+            /** Problems */
+            problems?: string[];
+            /** Message */
+            message?: string | null;
+        };
         /**
          * MarkedRead
          * @description How many were marked as read.
@@ -925,6 +1051,56 @@ export interface components {
              * @default false
              */
             plausible: boolean;
+        };
+        /**
+         * RunBody
+         * @description A run as the page asks for it.
+         *
+         *     Checked by RunRequest rather than here, so the rules — dates in order, not
+         *     in the future, under the cap — read the same whether a preview or a run is
+         *     being asked for, and fail with the same wording.
+         */
+        RunBody: {
+            /** Start Date */
+            start_date: string;
+            /** End Date */
+            end_date: string;
+            /** Cap */
+            cap?: number | null;
+        };
+        /**
+         * RunPreview
+         * @description What a run would do, worked out without doing any of it.
+         *
+         *     `lookups` is an upper bound. A company another domain already looked up is
+         *     not looked up again, and those are subtracted; anything else might be.
+         */
+        RunPreview: {
+            /** Theme */
+            theme: string;
+            /** Start Date */
+            start_date: string;
+            /** End Date */
+            end_date: string;
+            /** Cap */
+            cap: number;
+            /** Archived */
+            archived: number;
+            /** Passed Filters */
+            passed_filters: number;
+            /** Already Checked */
+            already_checked: number;
+            /** To Check */
+            to_check: number;
+            /** Left Over */
+            left_over: number;
+            /** Model Calls */
+            model_calls: number;
+            /** Lookups */
+            lookups: number;
+            /** Missing Days */
+            missing_days?: string[];
+            running?: components["schemas"]["ManualRun"] | null;
         };
         /**
          * Signal
@@ -1448,6 +1624,174 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_run_api_theses__domain__run_preview_get: {
+        parameters: {
+            query: {
+                start_date: string;
+                end_date: string;
+                cap?: number | null;
+            };
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPreview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    run_now_api_theses__domain__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                domain: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualRun"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_runs_api_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualRun"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_run_api_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualRun"];
                 };
             };
             /** @description Not Found */
