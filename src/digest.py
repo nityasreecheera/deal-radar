@@ -196,6 +196,16 @@ def render_digest(
         lines.append("")
         lines.append(clusters)
 
+    # The spending cap was reached. Those companies are real and unjudged, and
+    # the reader needs to know the list stopped short rather than ran out.
+    if run.left_over:
+        lines.append("")
+        lines.append(
+            f"⚠ {run.left_over} more companies passed the filters but were not "
+            f"judged — this run stops at {run.judge_cap}. They are still new, so "
+            "Run now on the Criteria page can judge them."
+        )
+
     # Above the problem list, because a coverage gap is not a footnote —
     # it changes what the rest of the email means.
     if run.unsearched:

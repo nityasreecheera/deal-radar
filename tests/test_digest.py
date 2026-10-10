@@ -82,6 +82,17 @@ def test_digest_header_counts_only_interesting_entries() -> None:
     assert "Judged 1 as not a fit." in content
 
 
+def test_digest_says_when_the_cap_stopped_the_run_short() -> None:
+    content = render_digest(run(left_over=37, judge_cap=200), "Healthcare AI")
+
+    assert "37 more companies passed the filters but were not judged" in content
+    assert "stops at 200" in content
+
+
+def test_digest_is_silent_about_the_cap_when_it_was_not_reached() -> None:
+    assert "were not judged" not in render_digest(run(), "Healthcare AI")
+
+
 def test_digest_says_so_when_nothing_matched() -> None:
     content = render_digest(run(candidates=[]), "Healthcare AI")
 
