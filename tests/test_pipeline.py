@@ -361,6 +361,52 @@ def test_limit_caps_how_many_are_judged(db) -> None:
     assert len(run.candidates) == 3
 
 
+def test_companies_over_the_cap_are_counted_not_dropped(db) -> None:
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing(f"Co {n}") for n in range(10)]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+        limit=3,
+    )
+
+    assert run.left_over == 7
+    assert run.judge_cap == 3
+
+    # Not marked, so the next run still sees them as new.
+    again = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing(f"Co {n}") for n in range(10)]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+        limit=3,
+    )
+
+    assert again.already_seen == 3
+    assert again.left_over == 4
+
+
+def test_a_run_under_the_cap_has_nothing_left_over(db) -> None:
+    run = run_radar(
+        db,
+        thesis(),
+        "2026-07-26",
+        "2026-07-29",
+        fetch_filings=fetcher([filing("Only One")]),
+        enrich=no_enrichment,
+        judge=verdict_judge(),
+        limit=3,
+    )
+
+    assert run.left_over == 0
+
+
 def test_skipped_count_combines_both_kinds_of_skip(db) -> None:
     mark_seen(db, "Known Co", source="form_d")
     mark_seen_for_theme(db, "Known Co", "Healthcare")

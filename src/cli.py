@@ -353,16 +353,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="window size when no dates are given (default: 3, to cover weekends)",
     )
+    # The limit that matters for cost is on judging, not fetching. Fetching from
+    # EDGAR is free, and capping it at 50 a group silently dropped real filings
+    # on any busy day — 13 of 63 in Other Technology over one weekend.
     run_parser.add_argument(
         "--limit",
         type=int,
-        help="judge at most this many companies — useful for a cheap trial",
+        default=200,
+        help="judge at most this many companies per domain (default: 200); "
+        "anything over is reported, not dropped",
     )
     run_parser.add_argument(
         "--max-per-group",
         type=int,
-        default=50,
-        help="cap search results per industry group (default: 50)",
+        default=500,
+        help="cap search results per industry group (default: 500)",
     )
     run_parser.add_argument(
         "--dry-run",

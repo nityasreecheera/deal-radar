@@ -56,6 +56,12 @@ class RadarRun(BaseModel):
     unexamined: int = 0
     searched_count: int = 0
 
+    # Companies that passed every filter but were not judged because the run's
+    # cap was reached. Not marked as seen, so they are still new tomorrow — but a
+    # cap reached silently reads like a light day, so it is counted.
+    left_over: int = 0
+    judge_cap: int | None = None
+
     @property
     def unknowns(self) -> list[Candidate]:
         """
@@ -132,7 +138,10 @@ def run_radar(
     # after the first.
     fresh, already_seen = filter_unseen(connection, kept, theme=thesis.domain)
 
-    if limit is not None:
+    left_over = 0
+
+    if limit is not None and len(fresh) > limit:
+        left_over = len(fresh) - limit
         fresh = fresh[:limit]
 
     candidates: list[Candidate] = []
@@ -214,6 +223,8 @@ def run_radar(
         unexamined=len(fresh) - len(candidates),
         unsearched=list(found.unsearched),
         searched_count=len(found.searched),
+        left_over=left_over,
+        judge_cap=limit,
     )
 
 
