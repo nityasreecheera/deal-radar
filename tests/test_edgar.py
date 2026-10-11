@@ -575,3 +575,11 @@ def test_a_rate_limit_is_retried_and_waits_longer(monkeypatch) -> None:
     assert len(calls) == 2
     # The rate-limit schedule, not the 1s server-hiccup one.
     assert slept == [5.0]
+
+
+def test_default_groups_are_spelled_the_way_the_sec_spells_them() -> None:
+    # The SEC writes "and", never "&". A group spelled with an ampersand is a
+    # search that finds nothing, every day, without an error.
+    from src.models import SEC_HEALTHCARE_GROUPS
+
+    assert all("&" not in group for group in SEC_HEALTHCARE_GROUPS)
