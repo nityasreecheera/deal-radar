@@ -51,6 +51,11 @@ scp -q "$HOST:deal-radar/.env" "$target/env-root.txt" 2>/dev/null || true
 scp -q "$HOST:deal-radar/web/.env.local" "$target/env-web.txt" 2>/dev/null || true
 chmod 600 "$target"/env-*.txt 2>/dev/null || true
 
+# And the domains. Criteria edited on the website exist only on the server, so a
+# restore without them brings back every judgement and none of the theses that
+# made them.
+scp -q -r "$HOST:deal-radar/config" "$target/config" 2>/dev/null || true
+
 echo "$(date -u +%FT%TZ) ok: $rows judgements -> $target"
 
 # Old backups are deleted only after a new one has been verified, so a run that
