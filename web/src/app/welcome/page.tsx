@@ -24,14 +24,14 @@ export default function WelcomePage() {
           href="/start"
           className="rounded border border-[var(--color-ink)] bg-[var(--color-ink)] px-5 py-2.5 text-sm text-[var(--color-paper)] transition-opacity hover:opacity-90"
         >
-          Get started
+          Continue as guest
         </a>
 
         <Link
           href="/login"
           className="text-[0.8125rem] text-[var(--color-ink-faint)] underline underline-offset-2 transition-colors hover:text-[var(--color-ink)]"
         >
-          Owner sign in
+          Sign in
         </Link>
       </div>
     </main>

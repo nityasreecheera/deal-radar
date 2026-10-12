@@ -1,7 +1,7 @@
 /**
  * Where the owner's "Sign out" would be, for a visitor: the way out.
  *
- * Back to the introduction, forgetting "Get started". The owner signs in from
+ * Back to the introduction, forgetting "Continue as guest". The owner signs in from
  * the introduction page, so a visitor's header carries only this.
  *
  * A plain link rather than <Link>: Next prefetches <Link> targets, and a prefetch
