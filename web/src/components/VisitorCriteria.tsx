@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { VerdictKey } from "@/components/VerdictKey";
+import { type Thesis } from "@/lib/api";
 
 /**
  * The criteria page as a visitor sees it: their own domains, and a way to add one.
@@ -58,6 +59,81 @@ const lines = (value: string) =>
 
 const box =
   "w-full rounded border border-[var(--color-rule)] bg-[var(--color-paper)] px-3 py-2 text-sm text-[var(--color-ink)] focus:border-[var(--color-ink)] focus:outline-none";
+
+/**
+ * The owner's public domains, read-only: what each verdict on the site was judged
+ * against, and examples of how to write criteria. Private domains are never
+ * returned to a visitor, so there is nothing to filter here.
+ */
+function ExampleDomains() {
+  const [examples, setExamples] = useState<Thesis[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/theses", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((found: Thesis[]) => {
+        if (!cancelled) setExamples(found);
+      })
+      .catch(() => {
+        if (!cancelled) setExamples([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!examples || examples.length === 0) return null;
+
+  return (
+    <section>
+      <h2 className="font-display text-[1.125rem]">Example domains</h2>
+      <p className="mt-1 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
+        The criteria every verdict on this site was judged against. Read-only — write
+        your own below.
+      </p>
+
+      <div className="mt-4 space-y-6">
+        {examples.map((thesis) => (
+          <article key={thesis.domain} className="border-t border-[var(--color-rule)] pt-3">
+            <h3 className="font-display text-[1.0625rem]">{thesis.domain}</h3>
+            <p className="mt-0.5 text-sm text-[var(--color-ink-soft)]">{thesis.name}</p>
+            <p className="mt-2 max-w-2xl text-sm text-[var(--color-ink-soft)]">{thesis.description}</p>
+
+            <div className="mt-3 grid gap-5 sm:grid-cols-2">
+              <div>
+                <p className="label mb-1">Looking for</p>
+                <ul className="space-y-0.5 text-sm">
+                  {(thesis.include ?? []).map((line) => (
+                    <li key={line}>
+                      <span className="text-[var(--color-fits)]">+</span> {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="label mb-1">Ruled out</p>
+                <ul className="space-y-0.5 text-sm text-[var(--color-ink-soft)]">
+                  {(thesis.exclude ?? []).map((line) => (
+                    <li key={line}>
+                      <span className="text-[var(--color-ink-faint)]">−</span> {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <p className="tabular mt-3 text-[0.75rem] text-[var(--color-ink-faint)]">
+              Smallest raise ${(thesis.filters?.min_offering_amount ?? 0).toLocaleString()}
+            </p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function VisitorCriteria() {
   const [domains, setDomains] = useState<VisitorDomain[] | null>(null);
@@ -157,7 +233,7 @@ export function VisitorCriteria() {
       <section>
         <p className="max-w-2xl text-sm leading-relaxed text-[var(--color-ink-soft)]">
           Write what you&apos;re looking for, and the radar judges companies it already
-          knows against it — about 15 at a time, in roughly half a minute. Your domains
+          knows against it — about 15 at a time, in a few seconds. Your domains
           appear in the dropdown on the companies page, and only you can see them, in
           this browser.
         </p>
@@ -196,7 +272,9 @@ export function VisitorCriteria() {
 
       {error && <p className="text-sm text-[var(--color-maybe)]">{error}</p>}
 
-      <section>
+      <ExampleDomains />
+
+      <section className="border-t border-[var(--color-rule)] pt-6">
         <h2 className="font-display text-[1.125rem]">Your domains</h2>
 
         {domains === null ? (
@@ -321,7 +399,7 @@ export function VisitorCriteria() {
             onClick={create}
             className="rounded border border-[var(--color-ink)] bg-[var(--color-ink)] px-4 py-2 text-sm text-[var(--color-paper)] transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {busy === "create" ? "Judging… about half a minute" : "Create and judge"}
+            {busy === "create" ? "Judging…" : "Create and judge"}
           </button>
         </div>
       </section>

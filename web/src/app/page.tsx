@@ -281,7 +281,7 @@ function CandidateList() {
                 href="/criteria"
                 className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
               >
-                {owner ? "Criteria" : "Your criteria"}
+                Criteria
               </Link>
             )}
             <Link

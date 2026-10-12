@@ -874,10 +874,21 @@ class ThesisEdit(BaseModel):
     original_domain: str | None = None
 
 
-@app.get("/api/theses", response_model=list[Thesis], dependencies=[OwnerOnly])
+@app.get("/api/theses", response_model=list[Thesis])
 def list_theses() -> list[Thesis]:
-    """Every set of criteria on disk."""
-    return load_all_theses()
+    """
+    Every set of criteria on disk — or, for a visitor, the public ones.
+
+    The public domains are examples, shown read-only so a visitor can see what a
+    verdict was judged against and how to write criteria of their own. A domain
+    marked `public: false` is left out entirely.
+    """
+    theses = load_all_theses()
+
+    if is_public():
+        return [thesis for thesis in theses if thesis.public]
+
+    return theses
 
 
 @app.put("/api/theses", response_model=Thesis, responses={422: {"model": ErrorBody}}, dependencies=[OwnerOnly])

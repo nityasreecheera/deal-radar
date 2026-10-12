@@ -63,6 +63,7 @@ def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     theses = [thesis("Healthcare"), thesis("Parallax", public=False)]
     monkeypatch.setattr(visibility_module, "load_all_theses", lambda: theses)
+    monkeypatch.setattr(api_module, "load_all_theses", lambda: theses)
     monkeypatch.setattr(api_module, "available_themes", lambda: ["Healthcare", "Parallax"])
 
     # A paid call must never happen for a visitor; make one fail loudly if it does.
@@ -141,7 +142,6 @@ def test_the_analysis_leaves_out_private_domains() -> None:
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("get", "/api/theses"),
         ("get", "/api/disagreements"),
         ("get", "/api/digests"),
         ("get", "/api/runs"),
@@ -158,6 +158,18 @@ def test_a_visitor_is_refused_anything_that_writes_spends_or_shows_strategy(meth
     response = getattr(client, method)(path, headers=PUBLIC, **({"json": {}} if method == "post" else {}))
 
     assert response.status_code == 403
+
+
+def test_a_visitor_reads_only_the_public_domains_criteria() -> None:
+    domains = [t["domain"] for t in client.get("/api/theses", headers=PUBLIC).json()]
+
+    assert domains == ["Healthcare"]
+
+
+def test_the_owner_reads_every_domains_criteria() -> None:
+    domains = [t["domain"] for t in client.get("/api/theses").json()]
+
+    assert domains == ["Healthcare", "Parallax"]
 
 
 def test_nothing_a_visitor_did_reached_the_owners_record() -> None:

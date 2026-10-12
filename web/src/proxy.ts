@@ -67,11 +67,15 @@ const OPEN_PATHS = [
 // the strategy, the digests and disagreements are the owner's working record,
 // and the runs are spending.
 const OWNER_API_PATHS = [
-  "/api/theses",
   "/api/digests",
   "/api/disagreements",
   "/api/runs",
 ];
+
+// Below /api/theses, everything is the owner's: previews and runs spend money.
+// /api/theses itself is readable — the API returns a visitor only the public
+// domains, as examples.
+const OWNER_API_PREFIXES = ["/api/theses/"];
 
 // The only writes a visitor may make: their own domains. The API keys these by
 // the visitor's id and keeps them out of the owner's record entirely.
@@ -204,7 +208,10 @@ export async function proxy(request: NextRequest) {
       });
     }
 
-    if (startsWith(pathname, OWNER_API_PATHS)) {
+    if (
+      startsWith(pathname, OWNER_API_PATHS) ||
+      OWNER_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+    ) {
       return new NextResponse("Sign in to see this.", { status: 403 });
     }
 

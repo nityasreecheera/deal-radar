@@ -62,9 +62,15 @@ def test_a_visitor_cannot_claim_to_be_the_owner() -> None:
 
 
 @pytest.mark.parametrize(
-    "path", ["/api/theses", "/api/digests", "/api/disagreements", "/api/runs"]
+    "path",
+    [
+        "/api/digests",
+        "/api/disagreements",
+        "/api/runs",
+        "/api/theses/Healthcare/run-preview?start_date=2026-09-01&end_date=2026-09-01",
+    ],
 )
-def test_a_visitor_cannot_read_the_strategy(path: str) -> None:
+def test_a_visitor_cannot_read_the_owners_record(path: str) -> None:
     assert httpx.get(f"{SITE}{path}", timeout=10).status_code == 403
 
 
@@ -91,6 +97,13 @@ def test_exit_takes_a_visitor_back_to_the_introduction() -> None:
         assert left.status_code == 303
         assert left.headers["location"] == "/welcome"
         assert "/welcome" in client.get("/").headers["location"]
+
+
+def test_a_visitor_reads_the_example_domains_but_not_private_ones() -> None:
+    domains = [t["domain"] for t in httpx.get(f"{SITE}/api/theses", timeout=10).json()]
+
+    assert all(isinstance(d, str) for d in domains)
+    assert "Parallax" not in domains
 
 
 def test_a_visitor_has_their_own_criteria_page() -> None:
