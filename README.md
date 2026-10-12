@@ -5,6 +5,10 @@ that you've never seen before, filtered down to the ones worth your time.
 
 Not a database and not a search tool. It's a filter that remembers.
 
+**Live:** [radar.humpback-pleco.ts.net](https://radar.humpback-pleco.ts.net) — continue
+as a guest to browse the judgements, write criteria of your own and see them judged,
+or ask the analysis page for a chart.
+
 ## About this project
 
 A working tool, not a demo. It runs on a schedule against live SEC filings and
@@ -12,7 +16,8 @@ emails its results every weekday.
 
 **Stack:** Python (FastAPI, Pydantic, SQLite) for the pipeline and API, Next.js and
 TypeScript for the site, cron on an Oracle Cloud VM, published through Tailscale
-Funnel. Any OpenAI-compatible model does the judging; Tavily does the web search.
+Funnel. Any OpenAI-compatible model does the judging (Claude Sonnet through
+OpenRouter here, a cheaper model for visitors); Tavily does the web search.
 
 What's worth a look if you're reading the code:
 
@@ -27,6 +32,15 @@ What's worth a look if you're reading the code:
   visitor's database connection reads through views that leave out private
   domains and the owner's own notes, so no endpoint can leak them by forgetting
   a filter. Writing, spending and the criteria stay behind sign-in.
+- **Visitors can try it without touching the record.** A guest writes their own
+  domain and sees it judged against companies already looked up. Their domains
+  live in tables of their own, read back through the same views, so they appear in
+  that visitor's dropdown and nowhere else — never in the owner's data.
+- **Charts from plain English, numbers from the data.** "Cornelis Networks vs
+  DriveNets" or "raises by month": the model only picks from a closed set of chart
+  plans; every figure is computed in Python through the viewer's own connection.
+- **Every Form D is kept,** not just the ones a domain searched for — over 23,000
+  since June — so a new domain can be run against months of history on the spot.
 - **Access without accounts.** Invite links and read-only API tokens are signed
   and expire on their own. Nothing is stored server-side.
 - **Over 500 tests that run offline.**
@@ -36,7 +50,7 @@ things real filings forced me to change.
 
 ## What you actually get
 
-One email, around 5am. Usually four or five names. Each one has what the company
+One email each weekday morning, around 9am US Eastern. Usually four or five names. Each one has what the company
 does in a sentence, how much they're raising, how much has already sold, who's on
 the filing, and a link to the source so you can check any of it.
 
@@ -68,30 +82,14 @@ Three things, all of them boring, which is why nobody builds for them:
 - **Every new name costs the same twenty minutes** of looking things up, and nine
   times out of ten the answer is no.
 
-## Why not Crunchbase
-
-Crunchbase has vastly more data than this will ever have, and that's not worth
-competing on. It's a supermarket. Everything's there and you do the shopping.
-
-Two things it can't do:
-
-| | Crunchbase | Deal Radar |
-|---|---|---|
-| Getting to it | You go and search | It arrives |
-| Companies you've rejected | Show up again every time | Never appear again |
-| Your thesis | Re-entered as filters, every session | Written down once |
-| Time per day | 30–45 minutes | 2 minutes |
-
-**It's not faster data.** Crunchbase pulls the same public filings within a day or
-two. The difference is when *you* find out. Something can sit in a database for a
-week while you have no idea, because you never ran the right search.
-
-They're not really competitors. Crunchbase could be a source *for* this. The part
-that matters is the memory and the filter on top, whatever's underneath.
-
 ## What it's found
 
-Running against live SEC filings from 1 June to 11 August 2026:
+Since June 2026 it has archived over 23,000 Form D filings and judged around a
+thousand companies across six domains. Five are public examples — AI infra, AI
+tools, Energy, Fintech and Healthcare — and one is private.
+
+The first run, against healthcare filings from 1 June to 11 August, is the one that
+showed what the ratio feels like:
 
 ```
 304 companies seen  ·  239 judged
@@ -116,9 +114,10 @@ eight.
 
 ## What it costs
 
-About **$2 a month**. SEC filings are free and public. Web search runs on a free
-tier. The only real cost is the model that reads each company, and that's roughly
-two dollars at this volume.
+A few dollars a month. SEC filings are free and public. The model that reads each
+company costs a couple of dollars at this volume, web search a little more, and the
+server about five. Catching up a backlog costs more: judging a thousand companies
+across five domains is roughly $10 on a cheap model and $50 on a strong one.
 
 It runs on a small cloud server on a schedule. Nothing has to be open and nothing
 has to be running. The site sits at a fixed address, open for anyone to read, and
@@ -170,6 +169,11 @@ model can reconstruct it, because it came from a conversation or a hunch rather 
 the filing. The filter's answer is kept underneath yours, so how often you disagree
 with it is measurable — and that's the honest test of whether the thesis is right.
 
+Visitors get the same pages read-only, without the owner's verdicts and notes, plus
+two things of their own: **their own criteria** — write a domain, and it's judged on
+the spot against companies already looked up — and **charts on request** on the
+analysis page.
+
 There's a question box at the bottom, but it only answers from companies already
 judged. It can't search or research anything new, and the page says so. That's on
 purpose: you can't ask about a company you don't know exists, and that's the whole
@@ -195,17 +199,25 @@ problem.
 It runs end to end against live filings, on a schedule, and emails the result.
 Over 500 tests that run offline.
 
-**The thesis is still a placeholder.** The criteria it currently judges against are
-a reasonable guess and nothing more — healthcare AI and clinical software, with a
-minimum raise size. Every number on this page was measured against criteria no
-investor has looked at yet.
+**The criteria are examples.** The public domains are a reasonable guess at what a
+fund in each area would want, and nothing more. Every number on this page was
+measured against criteria no investor has looked at yet.
 
 What belongs there is a real mandate. Stage, geography, cheque size, and above all
 what rules a company out in the first thirty seconds. That comes from a conversation,
 not from writing more code. It's one config file to change, and it's the change that
 decides whether any of this is useful.
 
-Known rough edges: Slack delivery exists in the code but has never been run.
+**It went quiet for seven weeks, and said so.** From 18 August to 10 October the
+web-search and model accounts ran out of credit. The radar kept fetching every
+morning and its digest said, correctly, "none could be examined — this is not a
+quiet day." Nobody was reading it. The lesson is that a job that reports its own
+failure honestly still needs someone watching; the archive meant the backlog
+could be judged afterwards rather than lost.
+
+Known rough edges: Slack delivery exists in the code but has never been run, and
+each morning's digest is saved per day rather than per domain, so the saved file
+holds only the last domain to run.
 
 ---
 
