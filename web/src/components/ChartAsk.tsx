@@ -122,7 +122,18 @@ export function ChartAsk() {
       <div className="mt-5 space-y-5">
         {history.map((item, index) => (
           <div key={`${item.question}-${index}`}>
-            <p className="mb-1.5 text-[0.75rem] text-[var(--color-ink-faint)]">&ldquo;{item.question}&rdquo;</p>
+            <div className="mb-1.5 flex items-baseline justify-between gap-4">
+              <p className="text-[0.75rem] text-[var(--color-ink-faint)]">&ldquo;{item.question}&rdquo;</p>
+              <button
+                type="button"
+                aria-label={`Remove the chart for “${item.question}”`}
+                title="Remove"
+                onClick={() => setHistory((current) => current.filter((_, i) => i !== index))}
+                className="px-1 text-[1rem] leading-none text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+              >
+                ×
+              </button>
+            </div>
             <Chart answer={item.answer} />
           </div>
         ))}
