@@ -15,7 +15,7 @@ from collections import deque
 from contextlib import closing
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -73,7 +73,18 @@ from src.runs import (
 )
 from src.signals import Assessment, assess
 from src.people import PersonLink, most_connected, shared_people
-from src.seen import connect, count_seen
+from src.seen import connect as open_index
+from src.seen import count_seen
+from src.visibility import (
+    VIEWER_HEADER,
+    apply_public_view,
+    is_public,
+    private_domains,
+    reset_viewer,
+    set_viewer,
+    viewer,
+    visible,
+)
 from src.thesis import (
     Thesis,
     ThesisError,
@@ -101,6 +112,51 @@ app = FastAPI(
     version="0.1.0",
 )
 
+@app.middleware("http")
+async def remember_viewer(request: Request, call_next):
+    """Who is asking, as the website's proxy said, for the rest of the request."""
+    token = set_viewer(request.headers.get(VIEWER_HEADER))
+
+    try:
+        return await call_next(request)
+    finally:
+        reset_viewer(token)
+
+
+def connect(db_path: Path | None = None):
+    """
+    The index, as this viewer may read it.
+
+    Every endpoint opens its connection through here, so a visitor's reads are
+    filtered without any endpoint having to remember to do it. See
+    src/visibility.py.
+    """
+    connection = open_index(db_path)
+
+    if is_public():
+        apply_public_view(connection, private_domains())
+
+    return connection
+
+
+def owner_only() -> None:
+    """
+    Refuse a visitor.
+
+    For anything that writes, spends money, or shows the strategy rather than
+    the findings. The proxy already refuses these; this is the second lock, so a
+    mistake in one place is not a hole.
+    """
+    if is_public():
+        raise HTTPException(
+            status_code=403,
+            detail={"ok": False, "errors": ["Sign in to do this."]},
+        )
+
+
+OwnerOnly = Depends(owner_only)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=DEV_ORIGINS,
@@ -120,6 +176,9 @@ class Meta(BaseModel):
     latest_filing: str | None = None
     thesis_name: str | None = None
     digest_dates: list[str] = Field(default_factory=list)
+
+    # owner, reader or public. The page hides what this viewer cannot use.
+    viewer: str = "owner"
 
 
 class CandidateList(BaseModel):
@@ -251,6 +310,12 @@ def digest_dates() -> list[str]:
     )
 
 
+@app.get("/api/viewer")
+def get_viewer() -> dict[str, str]:
+    """Who the proxy says is asking: owner, reader or public."""
+    return {"viewer": viewer()}
+
+
 @app.get("/api/health")
 def health() -> dict[str, bool]:
     """Liveness check."""
@@ -275,21 +340,24 @@ def get_meta() -> Meta:
     # domain configured this morning has judged nothing yet, and omitting it
     # makes it look absent; a domain whose file was deleted still has history
     # worth filtering to.
-    configured = available_themes()
+    configured = visible(available_themes())
 
     with closing(connect()) as connection:
         earliest, latest = date_range(connection)
         in_data = known_themes(connection)
 
+        # A visitor has read nothing and is sent no digest, so neither count
+        # means anything to them.
         return Meta(
             companies_known=count_seen(connection),
             judgements=count_by_verdict(connection),
-            unread=count_unread(connection),
+            unread=0 if is_public() else count_unread(connection),
             themes=sorted(set(configured) | set(in_data)),
             earliest_filing=earliest,
             latest_filing=latest,
-            thesis_name=thesis_name,
-            digest_dates=digest_dates(),
+            thesis_name=None if is_public() else thesis_name,
+            digest_dates=[] if is_public() else digest_dates(),
+            viewer=viewer(),
         )
 
 
@@ -313,7 +381,7 @@ def get_candidates(
     """
     with closing(connect()) as connection:
         parsed = parse_query(
-            q, sorted(set(available_themes()) | set(known_themes(connection)))
+            q, sorted(set(visible(available_themes())) | set(known_themes(connection)))
         )
 
         found = list_candidates(
@@ -369,6 +437,15 @@ def get_profile(accession: str) -> CompanyExplanation:
 
         if found.profile:
             return CompanyExplanation(accession=accession, profile=found.profile)
+
+        # Writing a profile is a paid model call. A visitor opening a page must
+        # not spend the owner's money, so they get the company's own words.
+        if is_public():
+            return CompanyExplanation(
+                accession=accession,
+                fallback=tidy(found.description) or None,
+                unavailable="No written explanation yet.",
+            )
 
         try:
             written = write_profile(
@@ -580,8 +657,7 @@ class Outreach(BaseModel):
 @app.post(
     "/api/candidates/{accession}/outreach",
     response_model=StoredCandidate,
-    responses={404: {"model": ErrorBody}, 422: {"model": ErrorBody}},
-)
+    responses={404: {"model": ErrorBody}, 422: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def record_one_outreach(accession: str, outreach: Outreach) -> StoredCandidate:
     """
     Note that you contacted a company, or what came of it.
@@ -624,13 +700,13 @@ class ThesisEdit(BaseModel):
     original_domain: str | None = None
 
 
-@app.get("/api/theses", response_model=list[Thesis])
+@app.get("/api/theses", response_model=list[Thesis], dependencies=[OwnerOnly])
 def list_theses() -> list[Thesis]:
     """Every set of criteria on disk."""
     return load_all_theses()
 
 
-@app.put("/api/theses", response_model=Thesis, responses={422: {"model": ErrorBody}})
+@app.put("/api/theses", response_model=Thesis, responses={422: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def write_thesis(edit: ThesisEdit) -> Thesis:
     """
     Create or replace a set of criteria.
@@ -651,7 +727,7 @@ def write_thesis(edit: ThesisEdit) -> Thesis:
     return edit.thesis
 
 
-@app.delete("/api/theses/{domain}", responses={404: {"model": ErrorBody}})
+@app.delete("/api/theses/{domain}", responses={404: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def remove_thesis(domain: str) -> dict:
     """
     Delete a set of criteria.
@@ -722,8 +798,7 @@ def launch(run: ManualRun, thesis: Thesis) -> None:
 @app.get(
     "/api/theses/{domain}/run-preview",
     response_model=RunPreview,
-    responses={404: {"model": ErrorBody}, 422: {"model": ErrorBody}},
-)
+    responses={404: {"model": ErrorBody}, 422: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def preview_run(
     domain: str,
     start_date: str,
@@ -754,8 +829,7 @@ def preview_run(
         404: {"model": ErrorBody},
         409: {"model": ErrorBody},
         422: {"model": ErrorBody},
-    },
-)
+    }, dependencies=[OwnerOnly])
 def run_now(domain: str, body: RunBody) -> ManualRun:
     """
     Run one domain over a range of the archive, now.
@@ -783,14 +857,14 @@ def run_now(domain: str, body: RunBody) -> ManualRun:
     return run
 
 
-@app.get("/api/runs", response_model=list[ManualRun])
+@app.get("/api/runs", response_model=list[ManualRun], dependencies=[OwnerOnly])
 def list_runs(limit: int = Query(default=10, ge=1, le=100)) -> list[ManualRun]:
     """Recent runs started from the website, newest first."""
     with closing(connect()) as connection:
         return recent_runs(connection, limit=limit)
 
 
-@app.get("/api/runs/{run_id}", response_model=ManualRun, responses={404: {"model": ErrorBody}})
+@app.get("/api/runs/{run_id}", response_model=ManualRun, responses={404: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def read_run(run_id: int) -> ManualRun:
     """One run, for the page to poll until it finishes."""
     with closing(connect()) as connection:
@@ -834,7 +908,7 @@ def get_analysis(theme: str | None = None) -> Analysis:
         seen = market_view(connection, theme=theme)
 
         try:
-            configured = available_themes()
+            configured = visible(available_themes())
         except ThesisError:
             configured = []
 
@@ -949,8 +1023,7 @@ def company_history(name: str) -> list[StoredCandidate]:
 @app.post(
     "/api/candidates/{accession}/viewed",
     response_model=StoredCandidate,
-    responses={404: {"model": ErrorBody}},
-)
+    responses={404: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def mark_one_viewed(accession: str) -> StoredCandidate:
     """
     Record that this one has been read.
@@ -986,8 +1059,7 @@ class Decision(BaseModel):
 @app.post(
     "/api/candidates/{accession}/decision",
     response_model=StoredCandidate,
-    responses={404: {"model": ErrorBody}},
-)
+    responses={404: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def record_one_decision(accession: str, decision: Decision) -> StoredCandidate:
     """
     Save what the analyst thinks, overriding the model.
@@ -1019,7 +1091,7 @@ def record_one_decision(accession: str, decision: Decision) -> StoredCandidate:
     return updated
 
 
-@app.get("/api/disagreements", response_model=list[StoredCandidate])
+@app.get("/api/disagreements", response_model=list[StoredCandidate], dependencies=[OwnerOnly])
 def list_disagreements(theme: str | None = None) -> list[StoredCandidate]:
     """
     Where the analyst overruled the model.
@@ -1031,14 +1103,14 @@ def list_disagreements(theme: str | None = None) -> list[StoredCandidate]:
         return disagreements(connection, theme=theme)
 
 
-@app.post("/api/viewed", response_model=MarkedRead)
+@app.post("/api/viewed", response_model=MarkedRead, dependencies=[OwnerOnly])
 def mark_everything_viewed(theme: str | None = None) -> MarkedRead:
     """Mark everything unread as read, optionally within one theme."""
     with closing(connect()) as connection:
         return MarkedRead(marked=mark_all_viewed(connection, theme=theme))
 
 
-@app.get("/api/digests", response_model=list[str])
+@app.get("/api/digests", response_model=list[str], dependencies=[OwnerOnly])
 def list_digests() -> list[str]:
     """Dates of saved digests, newest first."""
     return digest_dates()
@@ -1047,8 +1119,7 @@ def list_digests() -> list[str]:
 @app.get(
     "/api/digests/{date}",
     response_model=DigestBody,
-    responses={404: {"model": ErrorBody}},
-)
+    responses={404: {"model": ErrorBody}}, dependencies=[OwnerOnly])
 def get_digest(date: str) -> DigestBody:
     """
     One saved digest.
@@ -1076,8 +1147,7 @@ def get_digest(date: str) -> DigestBody:
         400: {"model": ErrorBody},
         429: {"model": ErrorBody},
         503: {"model": ErrorBody},
-    },
-)
+    }, dependencies=[OwnerOnly])
 def ask(question: Question) -> ChatAnswer:
     """
     Answer a follow-up question from stored judgements only.

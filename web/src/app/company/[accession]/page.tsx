@@ -7,6 +7,7 @@ import { CompanyProfile } from "@/components/CompanyProfile";
 import { ContactPanel } from "@/components/ContactPanel";
 import { DecisionPanel } from "@/components/DecisionPanel";
 import { EvidencePanel } from "@/components/EvidencePanel";
+import { useViewer } from "@/lib/viewer";
 import {
   VERDICT_LABEL,
   effectiveVerdict,
@@ -39,6 +40,7 @@ export default function CompanyPage({
   const { from } = use(searchParams);
 
   const [candidate, setCandidate] = useState<Candidate | null>(null);
+  const owner = useViewer() === "owner";
   const [detail, setDetail] = useState<Detail | null>(null);
   const [missing, setMissing] = useState(false);
 
@@ -82,19 +84,23 @@ export default function CompanyPage({
       }
     }
 
-    // Opening a company is reading it. Marking here rather than on the list row
-    // means arriving by direct link counts too, and the write is idempotent —
-    // the first reading is the one kept.
-    void fetch(`/api/candidates/${encodeURIComponent(accession)}/viewed`, {
-      method: "POST",
-    });
-
     void load();
 
     return () => {
       cancelled = true;
     };
   }, [accession, forDomain]);
+
+  // Opening a company is reading it — the owner's reading. Marking here rather
+  // than on the list row means arriving by direct link counts too, and the write
+  // is idempotent: the first reading is the one kept.
+  useEffect(() => {
+    if (!owner) return;
+
+    void fetch(`/api/candidates/${encodeURIComponent(accession)}/viewed`, {
+      method: "POST",
+    });
+  }, [owner, accession]);
 
   if (missing) {
     return (
@@ -190,15 +196,15 @@ export default function CompanyPage({
             {/* A rule separates it from the evidence: a left edge beside the
                 column, a top edge when it drops underneath. */}
             <div className="border-t border-[var(--color-rule)] pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-              <DecisionPanel candidate={candidate} onChange={setCandidate} />
-
-              {detail && (
-                <div className="mt-8">
-                  <EvidencePanel detail={detail} />
+              {owner && (
+                <div className="mb-8">
+                  <DecisionPanel candidate={candidate} onChange={setCandidate} />
                 </div>
               )}
 
-              {detail && (
+              {detail && <EvidencePanel detail={detail} />}
+
+              {owner && detail && (
                 <div className="mt-8">
                   <ContactPanel
                     candidate={candidate}

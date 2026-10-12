@@ -8,39 +8,76 @@ import {
 } from "@/lib/session";
 
 /**
- * The password gate. Renamed from middleware.ts — the middleware file
- * convention is deprecated in Next 16 and is now `proxy`.
+ * The gate. Renamed from middleware.ts — the middleware file convention is
+ * deprecated in Next 16 and is now `proxy`.
  *
- * This exists because the site can be published through a tunnel, and two of its
- * endpoints are not harmless: /api/chat spends money on every request, and
- * /api/viewed writes. An ungated URL would let anyone holding it run up a bill
- * or mark the whole inbox read.
+ * The site is public to read and private to change. Anyone may browse the
+ * judgements; only the owner writes, spends money, or sees the strategy.
  *
- * Two ways in, on purpose:
+ * Three kinds of visitor:
  *
- *   A session cookie, for people. It can be cleared, which is what makes a
- *   logout button possible at all.
+ *   The owner, with a session cookie (people) or Basic auth (scripts and the
+ *   deploy checks, which have no business with a login form).
  *
- *   Basic auth, for scripts. curl and the deploy checks have no business with a
- *   login form, and this keeps every existing command working unchanged.
+ *   A reader: someone else's program holding a signed API token. Every GET, no
+ *   writes, no /api/chat.
  *
- * Leave SHARE_USER and SHARE_PASSWORD unset for local development and nothing is
- * enforced.
+ *   Everyone else: public. GET only, and not the endpoints that show the
+ *   strategy rather than the findings. The API filters what they read — see
+ *   src/visibility.py — and refuses the same endpoints again, so a mistake here
+ *   is not a hole.
+ *
+ * Who is asking is sent to the API as a header on every request. It is always
+ * set here, overwriting anything the client sent, because the API trusts it.
+ *
+ * Leave SHARE_USER and SHARE_PASSWORD unset for local development and everyone
+ * is the owner.
  */
 const USER = process.env.SHARE_USER;
 const PASSWORD = process.env.SHARE_PASSWORD;
 
-// Reachable without a session, or there would be no way to get one.
-// /invite is open because it is how someone without the password gets a
-// session at all. It grants nothing on its own: the token inside it is signed
-// and dated, and the route refuses anything else.
-const OPEN_PATHS = ["/login", "/auth/login", "/auth/logout", "/invite"];
+const VIEWER_HEADER = "x-radar-viewer";
 
-function unauthorized() {
-  return new NextResponse("Authentication required.", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Deal Radar"' },
-  });
+// Set by the landing page's "Get started", so a returning visitor goes straight
+// to the companies instead of the introduction each time.
+const VISITOR_COOKIE = "radar_visitor";
+
+type Viewer = "owner" | "reader" | "public";
+
+// Reachable by anyone, or there would be no way in.
+// /invite grants nothing on its own: the token inside it is signed and dated.
+const OPEN_PATHS = [
+  "/login",
+  "/auth/login",
+  "/auth/logout",
+  "/invite",
+  "/welcome",
+  "/start",
+];
+
+// What a visitor may not read even though it is a GET: the criteria are the
+// strategy, the digests and disagreements are the owner's working record, and
+// the runs are spending.
+const OWNER_API_PATHS = [
+  "/api/theses",
+  "/api/digests",
+  "/api/disagreements",
+  "/api/runs",
+];
+
+const OWNER_PAGES = ["/criteria"];
+
+function startsWith(pathname: string, paths: string[]): boolean {
+  return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
+
+/** Pass the request on, telling the API who is asking. */
+function onward(request: NextRequest, viewer: Viewer) {
+  const headers = new Headers(request.headers);
+
+  headers.set(VIEWER_HEADER, viewer);
+
+  return NextResponse.next({ request: { headers } });
 }
 
 function hasValidBasicAuth(request: NextRequest): boolean {
@@ -68,20 +105,18 @@ function hasValidBasicAuth(request: NextRequest): boolean {
 
 export async function proxy(request: NextRequest) {
   if (!USER || !PASSWORD) {
-    return NextResponse.next();
+    return onward(request, "owner");
   }
 
   const { pathname } = request.nextUrl;
+  const isApi = pathname.startsWith("/api/");
 
   if (OPEN_PATHS.some((path) => pathname === path)) {
-    return NextResponse.next();
+    return onward(request, "public");
   }
 
-  const cookie = request.cookies.get(SESSION_COOKIE)?.value;
-
   // A bearer token first, because a program sends one on every request and has
-  // no cookie to fall back on. Tokens are for other people's software; the
-  // cookie is for a person in a browser.
+  // no cookie to fall back on.
   const authorization = request.headers.get("authorization");
   const bearer = authorization?.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length).trim()
@@ -89,7 +124,7 @@ export async function proxy(request: NextRequest) {
 
   const role = bearer
     ? await verifyToken(bearer, PASSWORD)
-    : await readSession(cookie, PASSWORD);
+    : await readSession(request.cookies.get(SESSION_COOKIE)?.value, PASSWORD);
 
   if (bearer && role === null) {
     return new NextResponse("That token is not valid or has expired.", {
@@ -98,43 +133,55 @@ export async function proxy(request: NextRequest) {
   }
 
   if (role === "reader") {
-    // Read everything, change nothing. /api/chat is excluded with the writes
-    // rather than the reads: it costs money on every call, and a token lives
-    // inside somebody else's loop.
+    // Read everything, change nothing. /api/chat is excluded with the writes:
+    // it costs money on every call, and a token lives in somebody else's loop.
     const writes = request.method !== "GET" && request.method !== "HEAD";
 
     if (writes || pathname.startsWith("/api/chat")) {
       return new NextResponse("This token is read-only.", { status: 403 });
     }
 
-    return NextResponse.next();
+    return onward(request, "reader");
   }
 
-  if (role === "owner") {
-    return NextResponse.next();
+  if (role === "owner" || hasValidBasicAuth(request)) {
+    return onward(request, "owner");
   }
 
-  if (hasValidBasicAuth(request)) {
-    return NextResponse.next();
+  // Everyone else reads, and only reads.
+  const reads = request.method === "GET" || request.method === "HEAD";
+
+  if (isApi) {
+    if (!reads) {
+      // 401 rather than 403: signing in would make this work.
+      return new NextResponse("Sign in to do this.", {
+        status: 401,
+        headers: { "WWW-Authenticate": 'Basic realm="Deal Radar"' },
+      });
+    }
+
+    if (startsWith(pathname, OWNER_API_PATHS)) {
+      return new NextResponse("Sign in to see this.", { status: 403 });
+    }
+
+    return onward(request, "public");
   }
 
-  // An API call gets a status it can act on. A person gets the login form.
-  //
-  // The split matters beyond politeness: scripts/share.sh refuses to publish
-  // until an unauthenticated request is rejected, and a redirect is not a
-  // rejection it can distinguish from a working site.
-  if (pathname.startsWith("/api/")) {
-    return unauthorized();
+  if (startsWith(pathname, OWNER_PAGES)) {
+    const login = new URL("/login", request.url);
+
+    login.searchParams.set("next", pathname);
+
+    return NextResponse.redirect(login);
   }
 
-  const login = new URL("/login", request.url);
-
-  // So logging in returns you where you were heading.
-  if (pathname !== "/") {
-    login.searchParams.set("next", pathname + request.nextUrl.search);
+  // A first visit lands on the introduction; "Get started" sets the cookie
+  // that skips it from then on.
+  if (pathname === "/" && !request.cookies.get(VISITOR_COOKIE)) {
+    return NextResponse.redirect(new URL("/welcome", request.url));
   }
 
-  return NextResponse.redirect(login);
+  return onward(request, "public");
 }
 
 export const config = {

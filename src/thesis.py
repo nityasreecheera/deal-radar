@@ -57,6 +57,10 @@ class Thesis(BaseModel):
         default_factory=lambda: list(SEC_HEALTHCARE_GROUPS)
     )
 
+    # Whether visitors to the public site may see this domain and its
+    # judgements. The owner always can.
+    public: bool = True
+
 
 class ThesisError(RuntimeError):
     """Raised when the thesis cannot be read."""

@@ -204,11 +204,15 @@ export default function AnalysisPage() {
             </h2>
             <p className="mb-4 max-w-2xl text-[0.8125rem] text-[var(--color-ink-faint)]">
               Split by the criteria&apos;s own &ldquo;looking for&rdquo; lines.
-              Edit those on the{" "}
-              <Link href="/criteria" className="underline underline-offset-2">
-                criteria page
-              </Link>{" "}
-              and this splits differently.
+              {meta?.viewer === "owner" && (
+                <>
+                  {" "}Edit those on the{" "}
+                  <Link href="/criteria" className="underline underline-offset-2">
+                    criteria page
+                  </Link>{" "}
+                  and this splits differently.
+                </>
+              )}
             </p>
 
             <div className="max-w-2xl space-y-2">

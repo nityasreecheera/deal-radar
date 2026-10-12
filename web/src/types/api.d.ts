@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/viewer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Viewer
+         * @description Who the proxy says is asking: owner, reader or public.
+         */
+        get: operations["get_viewer_api_viewer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -958,6 +978,11 @@ export interface components {
             thesis_name?: string | null;
             /** Digest Dates */
             digest_dates?: string[];
+            /**
+             * Viewer
+             * @default owner
+             */
+            viewer: string;
         };
         /**
          * Outreach
@@ -1258,6 +1283,11 @@ export interface components {
             filters?: components["schemas"]["ThesisFilters"];
             /** Sec Industry Groups */
             sec_industry_groups?: string[];
+            /**
+             * Public
+             * @default true
+             */
+            public: boolean;
         };
         /**
          * ThesisEdit
@@ -1313,6 +1343,28 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_viewer_api_viewer_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
     health_api_health_get: {
         parameters: {
             query?: never;
