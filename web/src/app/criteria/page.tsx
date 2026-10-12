@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { RunNow } from "@/components/RunNow";
+import { VisitorCriteria } from "@/components/VisitorCriteria";
 import { type Thesis } from "@/lib/api";
+import { useViewer } from "@/lib/viewer";
 
 /**
  * The criteria, and the ability to change them.
@@ -31,7 +33,47 @@ function empty(): Thesis {
   };
 }
 
+/**
+ * The owner edits the real criteria; a visitor writes their own. Two different
+ * pages behind one address, because "Criteria" in the header should mean the
+ * same thing to both of them.
+ */
 export default function CriteriaPage() {
+  const viewer = useViewer();
+
+  if (viewer === null) {
+    return <p className="label mx-auto max-w-3xl px-8 py-10">Loading</p>;
+  }
+
+  if (viewer !== "owner") {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <header className="border-b border-[var(--color-rule)]">
+          <div className="mx-auto max-w-3xl px-8 pt-8 pb-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              <span aria-hidden>←</span> All companies
+            </Link>
+
+            <h1 className="font-display mt-6 text-[1.75rem] leading-none tracking-tight">
+              Criteria
+            </h1>
+          </div>
+        </header>
+
+        <main className="mx-auto w-full max-w-3xl flex-1 px-8 py-10">
+          <VisitorCriteria />
+        </main>
+      </div>
+    );
+  }
+
+  return <OwnerCriteria />;
+}
+
+function OwnerCriteria() {
   const [theses, setTheses] = useState<Thesis[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);

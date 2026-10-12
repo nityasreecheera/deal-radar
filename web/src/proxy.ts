@@ -38,6 +38,13 @@ const PASSWORD = process.env.SHARE_PASSWORD;
 
 const VIEWER_HEADER = "x-radar-viewer";
 
+// An anonymous id per browser, so the domains a visitor writes come back to them
+// and nobody else. Random, never tied to a person, and separate from the
+// "Get started" cookie so Exit does not throw a visitor's domains away.
+const VISITOR_ID_HEADER = "x-radar-visitor-id";
+const VISITOR_ID_COOKIE = "radar_vid";
+const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 // Set by the landing page's "Get started", so a returning visitor goes straight
 // to the companies instead of the introduction each time.
 const VISITOR_COOKIE = "radar_visitor";
@@ -56,9 +63,9 @@ const OPEN_PATHS = [
   "/leave",
 ];
 
-// What a visitor may not read even though it is a GET: the criteria are the
-// strategy, the digests and disagreements are the owner's working record, and
-// the runs are spending.
+// What a visitor may not read even though it is a GET: the owner's criteria are
+// the strategy, the digests and disagreements are the owner's working record,
+// and the runs are spending.
 const OWNER_API_PATHS = [
   "/api/theses",
   "/api/digests",
@@ -66,19 +73,51 @@ const OWNER_API_PATHS = [
   "/api/runs",
 ];
 
-const OWNER_PAGES = ["/criteria"];
+// The only writes a visitor may make: their own domains. The API keys these by
+// the visitor's id and keeps them out of the owner's record entirely.
+const VISITOR_WRITES = ["/api/visitor"];
+
+const OWNER_PAGES: string[] = [];
 
 function startsWith(pathname: string, paths: string[]): boolean {
   return paths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
-/** Pass the request on, telling the API who is asking. */
+/**
+ * Pass the request on, telling the API who is asking.
+ *
+ * Both headers are always set or removed here, never passed through from the
+ * client: the API trusts them.
+ */
 function onward(request: NextRequest, viewer: Viewer) {
   const headers = new Headers(request.headers);
 
   headers.set(VIEWER_HEADER, viewer);
+  headers.delete(VISITOR_ID_HEADER);
 
-  return NextResponse.next({ request: { headers } });
+  if (viewer !== "public") {
+    return NextResponse.next({ request: { headers } });
+  }
+
+  // A visitor keeps the id they have, or is given one on this request.
+  const existing = request.cookies.get(VISITOR_ID_COOKIE)?.value;
+  const id = existing && ID_PATTERN.test(existing) ? existing : crypto.randomUUID();
+
+  headers.set(VISITOR_ID_HEADER, id);
+
+  const response = NextResponse.next({ request: { headers } });
+
+  if (id !== existing) {
+    response.cookies.set(VISITOR_ID_COOKIE, id, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 365 * 24 * 60 * 60,
+      secure: request.nextUrl.protocol === "https:",
+    });
+  }
+
+  return response;
 }
 
 function hasValidBasicAuth(request: NextRequest): boolean {
@@ -153,6 +192,10 @@ export async function proxy(request: NextRequest) {
   const reads = request.method === "GET" || request.method === "HEAD";
 
   if (isApi) {
+    if (!reads && startsWith(pathname, VISITOR_WRITES)) {
+      return onward(request, "public");
+    }
+
     if (!reads) {
       // 401 rather than 403: signing in would make this work.
       return new NextResponse("Sign in to do this.", {

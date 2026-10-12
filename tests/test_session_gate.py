@@ -93,10 +93,35 @@ def test_exit_takes_a_visitor_back_to_the_introduction() -> None:
         assert "/welcome" in client.get("/").headers["location"]
 
 
-def test_the_criteria_page_asks_a_visitor_to_sign_in() -> None:
-    response = httpx.get(f"{SITE}/criteria", timeout=10, follow_redirects=False)
+def test_a_visitor_has_their_own_criteria_page() -> None:
+    assert httpx.get(f"{SITE}/criteria", timeout=10, follow_redirects=False).status_code == 200
 
-    assert "/login" in response.headers["location"]
+
+def test_a_visitor_is_given_an_anonymous_id_on_their_first_page() -> None:
+    # Set on pages, which a visitor always loads before the page calls the API.
+    # API responses are the backend's own and carry no cookie from the proxy.
+    response = httpx.get(f"{SITE}/welcome", timeout=10)
+
+    assert "radar_vid" in response.cookies
+
+
+def test_a_visitor_keeps_the_same_id() -> None:
+    with httpx.Client(base_url=SITE, timeout=10) as client:
+        first = client.get("/welcome").cookies.get("radar_vid")
+        again = client.get("/criteria")
+
+        assert first
+        assert "radar_vid" not in again.cookies  # not reissued
+
+
+def test_a_visitor_can_reach_their_own_domains_and_nothing_else() -> None:
+    # An incomplete form: it gets past the proxy and is refused by the API's own
+    # validation, so the route is proved without judging anything or spending.
+    reached = httpx.post(f"{SITE}/api/visitor/domains", json={"domain": "x"}, timeout=10)
+    other = httpx.post(f"{SITE}/api/candidates/x/decision", json={}, timeout=10)
+
+    assert reached.status_code == 422
+    assert other.status_code == 401
 
 
 def test_the_login_page_is_reachable_without_a_session() -> None:

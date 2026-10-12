@@ -32,11 +32,16 @@ from src.thesis import load_all_theses
 
 VIEWER_HEADER = "x-radar-viewer"
 
+# An anonymous id the proxy keeps in a cookie for each visitor, so the domains a
+# visitor writes come back to them and to nobody else. See src/visitors.py.
+VISITOR_HEADER = "x-radar-visitor-id"
+
 # Owner: signed in. Reader: someone else's program holding an API token, which
 # reads everything. Public: anyone else.
 VIEWERS = ("owner", "reader", "public")
 
 _viewer: ContextVar[str] = ContextVar("viewer", default="owner")
+_visitor: ContextVar[str | None] = ContextVar("visitor", default=None)
 
 # The owner's own record on a company. A visitor sees the model's verdict and
 # reasoning, never these.
@@ -58,6 +63,22 @@ def set_viewer(value: str | None):
 
 def reset_viewer(token) -> None:
     _viewer.reset(token)
+
+
+def set_visitor(value: str | None):
+    """Record which visitor is asking, if the id is well formed. Returns a token."""
+    from src.visitors import valid_id
+
+    return _visitor.set(valid_id(value))
+
+
+def reset_visitor(token) -> None:
+    _visitor.reset(token)
+
+
+def visitor_id() -> str | None:
+    """The visitor's anonymous id, or None for the owner, a reader, or no cookie."""
+    return _visitor.get() if is_public() else None
 
 
 def viewer() -> str:
@@ -88,13 +109,18 @@ def quoted(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def apply_public_view(connection: sqlite3.Connection, hidden: list[str]) -> None:
+def apply_public_view(
+    connection: sqlite3.Connection,
+    hidden: list[str],
+    visitor: str | None = None,
+) -> None:
     """
     Shadow the judgement tables with what a visitor may read.
 
-    `candidate` loses the hidden domains' rows and the owner's columns. The
-    tables keyed by filing follow it, so a person or a researcher found only on a
-    hidden domain's company is not listed either.
+    `candidate` loses the hidden domains' rows and the owner's columns, and gains
+    this visitor's own judgements, if they have written any domains. The tables
+    keyed by filing follow it, so a person or a researcher found only on a hidden
+    domain's company is not listed either.
     """
     columns = [
         row["name"]
@@ -109,9 +135,19 @@ def apply_public_view(connection: sqlite3.Connection, hidden: list[str]) -> None
         else ""
     )
 
+    # The visitor's own rows. visitor_candidate mirrors candidate's columns, and
+    # the owner's ones are stored empty there, so they can be selected as they are.
+    mine = (
+        f"UNION ALL SELECT {', '.join(columns)} FROM main.visitor_candidate "
+        f"WHERE visitor_id = {quoted(visitor)}"
+        if visitor
+        else ""
+    )
+
     connection.executescript(
         f"""
-        CREATE TEMP VIEW candidate AS SELECT {select} FROM main.candidate {where};
+        CREATE TEMP VIEW candidate AS
+            SELECT {select} FROM main.candidate {where} {mine};
         CREATE TEMP VIEW person AS SELECT * FROM main.person
             WHERE accession IN (SELECT accession FROM temp.candidate);
         CREATE TEMP VIEW researcher AS SELECT * FROM main.researcher
