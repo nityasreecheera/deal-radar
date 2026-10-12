@@ -28,7 +28,9 @@ import {
  * makes a filtered list something you can send someone.
  */
 
-const DEFAULT_VERDICTS = ["fits", "maybe"];
+// What a list shows before anyone picks a verdict: the companies that fit.
+// Maybe, unknown and no fit are a click away.
+const DEFAULT_VERDICTS = ["fits"];
 
 export default function Home() {
   // useSearchParams forces client rendering up to the nearest boundary, and a
@@ -90,7 +92,7 @@ function CandidateList() {
     () =>
       buildQuery({
         // With no domain chosen there is nothing to filter a verdict against,
-        // so the list is what any thesis thought worth a look.
+        // so the list is what any thesis judged a fit.
         verdict: theme ? verdicts : DEFAULT_VERDICTS,
         theme: theme || undefined,
         since: since || undefined,
