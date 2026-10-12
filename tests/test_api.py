@@ -760,3 +760,28 @@ def test_deleting_criteria_keeps_the_judgements(config) -> None:
 
 def test_deleting_criteria_that_do_not_exist_is_a_404(config) -> None:
     assert client.delete("/api/theses/Nothing").status_code == 404
+
+
+# --- sorting ------------------------------------------------------------------
+
+def test_the_list_sorts_by_date_amount_or_state() -> None:
+    def make(name, accession, amount, filed, state):
+        c = candidate(name=name, accession=accession, amount=amount, filed_date=filed)
+        return c.model_copy(update={"filing": c.filing.model_copy(update={"state": state})})
+
+    seed(
+        make("Old Big", "acc-a", 50_000_000, "2026-07-01", "TX"),
+        make("New Small", "acc-b", 1_000_000, "2026-09-01", "CA"),
+        make("Mid Unknown", "acc-c", None, "2026-08-01", None),
+    )
+
+    def names(sort: str) -> list[str]:
+        return [c["company_name"] for c in client.get("/api/candidates", params={"sort": sort}).json()["candidates"]]
+
+    assert names("date") == ["New Small", "Mid Unknown", "Old Big"]
+    assert names("amount") == ["Old Big", "New Small", "Mid Unknown"]  # undisclosed last
+    assert names("state") == ["New Small", "Old Big", "Mid Unknown"]  # no state last
+
+
+def test_an_unknown_sort_is_refused() -> None:
+    assert client.get("/api/candidates", params={"sort": "valuation"}).status_code == 422

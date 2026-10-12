@@ -57,6 +57,7 @@ function CandidateList() {
   const theme = params.get("theme") ?? "";
   const since = params.get("since") ?? "";
   const until = params.get("until") ?? "";
+  const sort = (params.get("sort") ?? "date") as "date" | "amount" | "state";
   const unreadOnly = params.get("unread") === "1";
   const search = params.get("q") ?? "";
 
@@ -97,11 +98,12 @@ function CandidateList() {
         theme: theme || undefined,
         since: since || undefined,
         until: until || undefined,
+        sort,
         unreadOnly,
         q: search || undefined,
         limit: 200,
       }),
-    [verdicts, theme, since, until, unreadOnly, search],
+    [verdicts, theme, since, until, sort, unreadOnly, search],
   );
 
   // Which domains found each company interesting. Built before the collapse,
@@ -337,31 +339,18 @@ function CandidateList() {
           </label>
 
           <label>
-            <span className="label mb-1 block">Filed from</span>
-            <input
-              type="date"
-              value={since}
-              min={meta?.earliest_filing ?? undefined}
-              max={meta?.latest_filing ?? undefined}
+            <span className="label mb-1 block">Sort by</span>
+            <select
+              value={sort}
               onChange={(event) =>
-                setFilters({ since: event.target.value || null })
+                setFilters({ sort: event.target.value === "date" ? null : event.target.value })
               }
-              className="field tabular"
-            />
-          </label>
-
-          <label>
-            <span className="label mb-1 block">Until</span>
-            <input
-              type="date"
-              value={until}
-              min={meta?.earliest_filing ?? undefined}
-              max={meta?.latest_filing ?? undefined}
-              onChange={(event) =>
-                setFilters({ until: event.target.value || null })
-              }
-              className="field tabular"
-            />
+              className="field pr-6"
+            >
+              <option value="date">Newest first</option>
+              <option value="amount">Largest raise</option>
+              <option value="state">State (A–Z)</option>
+            </select>
           </label>
 
           {/* A verdict belongs to a thesis, so it has no meaning until one is

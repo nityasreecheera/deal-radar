@@ -290,7 +290,11 @@ export interface paths {
         };
         /**
          * List Theses
-         * @description Every set of criteria on disk.
+         * @description Every set of criteria on disk — or, for a visitor, the public ones.
+         *
+         *     The public domains are examples, shown read-only so a visitor can see what a
+         *     verdict was judged against and how to write criteria of their own. A domain
+         *     marked `public: false` is left out entirely.
          */
         get: operations["list_theses_api_theses_get"];
         /**
@@ -1868,6 +1872,7 @@ export interface operations {
                 unread_only?: boolean;
                 q?: string;
                 limit?: number;
+                sort?: "date" | "amount" | "state";
             };
             header?: never;
             path?: never;
