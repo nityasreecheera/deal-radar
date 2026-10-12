@@ -53,6 +53,7 @@ const OPEN_PATHS = [
   "/invite",
   "/welcome",
   "/start",
+  "/leave",
 ];
 
 // What a visitor may not read even though it is a GET: the criteria are the

@@ -7,7 +7,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AskBox } from "@/components/AskBox";
 import { CandidateRow } from "@/components/CandidateRow";
 import { LogoutButton } from "@/components/LogoutButton";
-import { SignInLink } from "@/components/SignInLink";
+import { ExitLink } from "@/components/ExitLink";
 import { SearchBox } from "@/components/SearchBox";
 import {
   VERDICTS,
@@ -307,7 +307,7 @@ function CandidateList() {
               "loading"
             )}
             <span className="mx-2 text-[var(--color-rule)]">/</span>
-            {owner ? <LogoutButton /> : <SignInLink />}
+            {owner ? <LogoutButton /> : <ExitLink />}
           </p>
         </div>
       </header>
