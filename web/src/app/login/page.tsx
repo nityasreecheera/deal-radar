@@ -21,10 +21,6 @@ export default async function LoginPage({
           Deal Radar
         </h1>
 
-        <p className="mt-2 text-[0.8125rem] text-[var(--color-ink-faint)]">
-          This site is private.
-        </p>
-
         {invite === "expired" && (
           <p className="mt-2 text-[0.8125rem] text-[var(--color-maybe)]">
             That invite link is no longer valid.
