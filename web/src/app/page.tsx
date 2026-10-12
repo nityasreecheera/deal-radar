@@ -64,6 +64,9 @@ function CandidateList() {
   // An explicitly empty `verdict` means "none selected", which is different
   // from the parameter being absent. Reading it as absent would silently
   // re-select the defaults and make deselecting everything impossible.
+  // A search with no verdicts picked looks at every verdict. See `query`.
+  const searchingAll = Boolean(params.get("q")) && params.get("verdict") === null;
+
   const verdicts = useMemo(() => {
     const raw = params.get("verdict");
 
@@ -94,7 +97,14 @@ function CandidateList() {
       buildQuery({
         // With no domain chosen there is nothing to filter a verdict against,
         // so the list is what any thesis judged a fit.
-        verdict: theme ? verdicts : DEFAULT_VERDICTS,
+        // Searching for a name means "find this company", whatever was decided
+        // about it — so a search ignores the default of fits only, and narrows
+        // by verdict only when someone picked verdicts themselves.
+        verdict: searchingAll
+            ? []
+            : theme
+              ? verdicts
+              : DEFAULT_VERDICTS,
         theme: theme || undefined,
         since: since || undefined,
         until: until || undefined,
@@ -103,7 +113,7 @@ function CandidateList() {
         q: search || undefined,
         limit: 200,
       }),
-    [verdicts, theme, since, until, sort, unreadOnly, search],
+    [verdicts, searchingAll, theme, since, until, sort, unreadOnly, search],
   );
 
   // Which domains found each company interesting. Built before the collapse,
@@ -360,7 +370,7 @@ function CandidateList() {
               nothing to turn back on without first picking a domain. */}
           <div className={`flex items-baseline gap-4 ${theme ? "" : "hidden"}`}>
             {VERDICTS.map((verdict) => {
-              const active = verdicts.includes(verdict);
+              const active = !searchingAll && verdicts.includes(verdict);
 
               return (
                 <button
