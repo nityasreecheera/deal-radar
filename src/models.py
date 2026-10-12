@@ -17,7 +17,7 @@ from src.normalize import normalize_company_name, slugify_company_name
 SEC_HEALTHCARE_GROUPS = (
     "Biotechnology",
     "Health Insurance",
-    "Hospitals & Physicians",
+    "Hospitals and Physicians",
     "Other Health Care",
     "Pharmaceuticals",
 )
