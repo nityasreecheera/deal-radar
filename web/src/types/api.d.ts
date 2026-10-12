@@ -24,6 +24,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/visitor/domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Visitor Domains
+         * @description The domains this visitor has written. Empty for anyone else.
+         */
+        get: operations["list_visitor_domains_api_visitor_domains_get"];
+        put?: never;
+        /**
+         * Add Visitor Domain
+         * @description A visitor's own domain: saved for them alone, and its first batch judged now.
+         *
+         *     Judged against companies already looked up, on a cheaper model, within
+         *     per-visitor and site-wide limits. See src/visitors.py.
+         */
+        post: operations["add_visitor_domain_api_visitor_domains_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/visitor/domains/{theme}/more": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Judge More For Visitor
+         * @description The next batch for one of this visitor's domains.
+         */
+        post: operations["judge_more_for_visitor_api_visitor_domains__theme__more_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/visitor/domains/{theme}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Visitor Domain
+         * @description Delete one of this visitor's domains and everything judged for it.
+         */
+        delete: operations["remove_visitor_domain_api_visitor_domains__theme__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1321,6 +1388,46 @@ export interface components {
              */
             require_disclosed_amount: boolean;
         };
+        /**
+         * TryResult
+         * @description What one batch did.
+         */
+        TryResult: {
+            /** Theme */
+            theme: string;
+            /**
+             * Judged
+             * @default 0
+             */
+            judged: number;
+            /**
+             * Fits
+             * @default 0
+             */
+            fits: number;
+            /**
+             * Maybe
+             * @default 0
+             */
+            maybe: number;
+            /**
+             * Unknown
+             * @default 0
+             */
+            unknown: number;
+            /**
+             * No Fit
+             * @default 0
+             */
+            no_fit: number;
+            /**
+             * Left
+             * @default 0
+             */
+            left: number;
+            /** Problems */
+            problems?: string[];
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -1333,6 +1440,53 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** VisitorDomain */
+        VisitorDomain: {
+            /** Domain */
+            domain: string;
+            /** Theme */
+            theme: string;
+            /** Include */
+            include: string[];
+            /** Exclude */
+            exclude?: string[];
+            /** Min Amount */
+            min_amount?: number | null;
+            /**
+             * Judged
+             * @default 0
+             */
+            judged: number;
+            /**
+             * Fits
+             * @default 0
+             */
+            fits: number;
+            /**
+             * Maybe
+             * @default 0
+             */
+            maybe: number;
+            /**
+             * Left
+             * @default 0
+             */
+            left: number;
+        };
+        /**
+         * VisitorDomainRequest
+         * @description What a visitor writes on the criteria page.
+         */
+        VisitorDomainRequest: {
+            /** Domain */
+            domain: string;
+            /** Include */
+            include: string[];
+            /** Exclude */
+            exclude?: string[];
+            /** Min Amount */
+            min_amount?: number | null;
         };
     };
     responses: never;
@@ -1361,6 +1515,177 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    list_visitor_domains_api_visitor_domains_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisitorDomain"][];
+                };
+            };
+        };
+    };
+    add_visitor_domain_api_visitor_domains_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisitorDomainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TryResult"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    judge_more_for_visitor_api_visitor_domains__theme__more_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TryResult"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    remove_visitor_domain_api_visitor_domains__theme__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                theme: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

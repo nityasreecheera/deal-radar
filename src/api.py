@@ -77,13 +77,30 @@ from src.seen import connect as open_index
 from src.seen import count_seen
 from src.visibility import (
     VIEWER_HEADER,
+    VISITOR_HEADER,
     apply_public_view,
     is_public,
     private_domains,
     reset_viewer,
+    reset_visitor,
     set_viewer,
+    set_visitor,
     viewer,
     visible,
+    visitor_id,
+)
+from src.visitors import (
+    TryResult,
+    VisitorDomain,
+    VisitorDomainRequest,
+    VisitorError,
+    VisitorLimit,
+    create_domain,
+    delete_domain,
+    domains_for,
+    ensure_tables,
+    forget_old,
+    judge_more,
 )
 from src.thesis import (
     Thesis,
@@ -116,10 +133,12 @@ app = FastAPI(
 async def remember_viewer(request: Request, call_next):
     """Who is asking, as the website's proxy said, for the rest of the request."""
     token = set_viewer(request.headers.get(VIEWER_HEADER))
+    visitor = set_visitor(request.headers.get(VISITOR_HEADER))
 
     try:
         return await call_next(request)
     finally:
+        reset_visitor(visitor)
         reset_viewer(token)
 
 
@@ -132,9 +151,10 @@ def connect(db_path: Path | None = None):
     src/visibility.py.
     """
     connection = open_index(db_path)
+    ensure_tables(connection)
 
     if is_public():
-        apply_public_view(connection, private_domains())
+        apply_public_view(connection, private_domains(), visitor_id())
 
     return connection
 
@@ -314,6 +334,94 @@ def digest_dates() -> list[str]:
 def get_viewer() -> dict[str, str]:
     """Who the proxy says is asking: owner, reader or public."""
     return {"viewer": viewer()}
+
+
+def visitor_only() -> str:
+    """The asking visitor's id, or a refusal: these endpoints are a visitor's own."""
+    found = visitor_id()
+
+    if found is None:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "ok": False,
+                "errors": ["Your own domains are for visitors. Open the site signed out to try them."],
+            },
+        )
+
+    return found
+
+
+def refused(exc: VisitorError) -> HTTPException:
+    return HTTPException(
+        status_code=429 if isinstance(exc, VisitorLimit) else 422,
+        detail={"ok": False, "errors": [str(exc)]},
+    )
+
+
+@app.get("/api/visitor/domains", response_model=list[VisitorDomain])
+def list_visitor_domains() -> list[VisitorDomain]:
+    """The domains this visitor has written. Empty for anyone else."""
+    found = visitor_id()
+
+    if found is None:
+        return []
+
+    with closing(connect()) as connection:
+        return domains_for(connection, found)
+
+
+@app.post(
+    "/api/visitor/domains",
+    response_model=TryResult,
+    responses={403: {"model": ErrorBody}, 422: {"model": ErrorBody}, 429: {"model": ErrorBody}},
+)
+def add_visitor_domain(request: VisitorDomainRequest) -> TryResult:
+    """
+    A visitor's own domain: saved for them alone, and its first batch judged now.
+
+    Judged against companies already looked up, on a cheaper model, within
+    per-visitor and site-wide limits. See src/visitors.py.
+    """
+    found = visitor_only()
+
+    with closing(connect()) as connection:
+        forget_old(connection)
+
+        try:
+            return create_domain(connection, found, request)
+        except VisitorError as exc:
+            raise refused(exc) from exc
+
+
+@app.post(
+    "/api/visitor/domains/{theme}/more",
+    response_model=TryResult,
+    responses={403: {"model": ErrorBody}, 422: {"model": ErrorBody}, 429: {"model": ErrorBody}},
+)
+def judge_more_for_visitor(theme: str) -> TryResult:
+    """The next batch for one of this visitor's domains."""
+    found = visitor_only()
+
+    with closing(connect()) as connection:
+        try:
+            return judge_more(connection, found, theme)
+        except VisitorError as exc:
+            raise refused(exc) from exc
+
+
+@app.delete("/api/visitor/domains/{theme}", responses={403: {"model": ErrorBody}, 404: {"model": ErrorBody}})
+def remove_visitor_domain(theme: str) -> dict:
+    """Delete one of this visitor's domains and everything judged for it."""
+    found = visitor_only()
+
+    with closing(connect()) as connection:
+        if not delete_domain(connection, found, theme):
+            raise HTTPException(
+                status_code=404, detail={"ok": False, "errors": ["That domain isn't one of yours."]}
+            )
+
+    return {"deleted": theme}
 
 
 @app.get("/api/health")

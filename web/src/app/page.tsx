@@ -9,6 +9,7 @@ import { CandidateRow } from "@/components/CandidateRow";
 import { LogoutButton } from "@/components/LogoutButton";
 import { ExitLink } from "@/components/ExitLink";
 import { SearchBox } from "@/components/SearchBox";
+import { VerdictKey } from "@/components/VerdictKey";
 import {
   VERDICTS,
   VERDICT_LABEL,
@@ -275,12 +276,12 @@ function CandidateList() {
           </h1>
 
           <span className="flex items-baseline gap-5">
-            {owner && (
+            {meta && (
               <Link
                 href="/criteria"
                 className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
               >
-                Criteria
+                {owner ? "Criteria" : "Your criteria"}
               </Link>
             )}
             <Link
@@ -431,6 +432,10 @@ function CandidateList() {
             )}
           </div>
         </section>
+
+        <div className="border-b border-[var(--color-rule)] py-3">
+          <VerdictKey />
+        </div>
 
         {loading ? (
           <p className="label py-10">Loading</p>
