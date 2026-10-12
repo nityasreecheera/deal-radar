@@ -69,6 +69,7 @@ from src.models import FitVerdict
 from src.profile import Unavailable as ProfileUnavailable
 from src.profile import tidy, write_profile
 from src.query import parse_query
+from src.regions import codes_in, country_of, is_us, region_name, subdivision_of
 from src.research import Researcher
 from src.runs import (
     ManualRun,
@@ -195,6 +196,16 @@ app.add_middleware(
 )
 
 
+class Region(BaseModel):
+    code: str
+    name: str
+    us: bool
+    country: str
+    # The state or province within the country, where there is one.
+    subdivision: str | None = None
+    count: int
+
+
 class Meta(BaseModel):
     """Everything the interface chrome needs, in one request."""
 
@@ -209,6 +220,10 @@ class Meta(BaseModel):
 
     # owner, reader or public. The page hides what this viewer cannot use.
     viewer: str = "owner"
+
+    # Every state or country in what this viewer can read, with its name and
+    # how many judgements are there, for the State filter.
+    states: list[Region] = Field(default_factory=list)
 
 
 class CandidateList(BaseModel):
@@ -533,7 +548,40 @@ def get_meta() -> Meta:
             thesis_name=None if is_public() else thesis_name,
             digest_dates=[] if is_public() else digest_dates(),
             viewer=viewer(),
+            states=[
+                Region(
+                    code=row[0],
+                    name=region_name(row[0]) or row[0],
+                    us=is_us(row[0]),
+                    country=country_of(row[0]) or row[0],
+                    subdivision=subdivision_of(row[0]),
+                    count=row[1],
+                )
+                for row in connection.execute(
+                    "SELECT state, COUNT(*) FROM candidate "
+                    "WHERE state IS NOT NULL AND state != '' GROUP BY state"
+                )
+            ],
         )
+
+
+def located(states: list[str] | None, country: str | None) -> list[str] | None:
+    """
+    The state codes a list is limited to.
+
+    A country stands for every code in it; a state picked as well narrows that to
+    the state. A country with no codes at all matches nothing rather than
+    everything.
+    """
+    if not country:
+        return states or None
+
+    inside = codes_in(country)
+
+    if states:
+        inside = [code for code in inside if code in states]
+
+    return inside or ["--none--"]
 
 
 @app.get("/api/candidates", response_model=CandidateList)
@@ -545,7 +593,9 @@ def get_candidates(
     unread_only: bool = False,
     q: str = Query(default="", max_length=200),
     limit: int = Query(default=100, ge=1, le=500),
-    sort: Literal["date", "amount", "state"] = "date",
+    sort: Literal["newest", "oldest", "largest", "smallest", "state", "date", "amount"] = "newest",
+    state: list[str] | None = Query(default=None, max_length=60),
+    country: str | None = Query(default=None, max_length=60),
 ) -> CandidateList:
     """
     Judgements, filtered. Every parameter is optional and combines.
@@ -572,6 +622,7 @@ def get_candidates(
             max_amount=parsed.max_amount,
             limit=limit,
             sort=sort,
+            states=located(state, country),
         )
 
         return CandidateList(

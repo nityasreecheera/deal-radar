@@ -1124,6 +1124,8 @@ export interface components {
              * @default owner
              */
             viewer: string;
+            /** States */
+            states?: components["schemas"]["Region"][];
         };
         /**
          * Outreach
@@ -1156,6 +1158,21 @@ export interface components {
             question: string;
             /** Theme */
             theme?: string | null;
+        };
+        /** Region */
+        Region: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Us */
+            us: boolean;
+            /** Country */
+            country: string;
+            /** Subdivision */
+            subdivision?: string | null;
+            /** Count */
+            count: number;
         };
         /**
          * RelatedPerson
@@ -1407,6 +1424,16 @@ export interface components {
              * @enum {string}
              */
             readonly effective_verdict: "fits" | "maybe" | "unknown" | "no_fit";
+            /**
+             * Country
+             * @description The country, read from EDGAR's state or country code.
+             */
+            readonly country: string | null;
+            /**
+             * Subdivision
+             * @description The state or province within that country, where there is one.
+             */
+            readonly subdivision: string | null;
             /**
              * Overridden
              * @description Whether the analyst disagreed with the model. Worth surfacing.
@@ -1874,7 +1901,9 @@ export interface operations {
                 unread_only?: boolean;
                 q?: string;
                 limit?: number;
-                sort?: "date" | "amount" | "state";
+                sort?: "newest" | "oldest" | "largest" | "smallest" | "state" | "date" | "amount";
+                state?: string[] | null;
+                country?: string | null;
             };
             header?: never;
             path?: never;

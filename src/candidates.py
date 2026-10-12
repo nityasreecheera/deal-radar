@@ -112,6 +112,22 @@ class StoredCandidate(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
+    def country(self) -> str | None:
+        """The country, read from EDGAR's state or country code."""
+        from src.regions import country_of
+
+        return country_of(self.state)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def subdivision(self) -> str | None:
+        """The state or province within that country, where there is one."""
+        from src.regions import subdivision_of
+
+        return subdivision_of(self.state)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
     def overridden(self) -> bool:
         """Whether the analyst disagreed with the model. Worth surfacing."""
         return self.user_verdict is not None and self.user_verdict != self.verdict
@@ -319,10 +335,16 @@ def find_by_company(
 
 # How a list can be ordered. Fixed strings, never built from a request.
 SORTS = {
-    "date": "filed_date DESC, offering_amount DESC",
-    "amount": "offering_amount IS NULL, offering_amount DESC, filed_date DESC",
+    "newest": "filed_date DESC, offering_amount DESC",
+    "oldest": "filed_date ASC, offering_amount DESC",
+    "largest": "offering_amount IS NULL, offering_amount DESC, filed_date DESC",
+    "smallest": "offering_amount IS NULL, offering_amount ASC, filed_date DESC",
     "state": "state IS NULL OR state = '', state ASC, filed_date DESC",
 }
+
+# The names the first version used, still accepted so old links keep working.
+SORTS["date"] = SORTS["newest"]
+SORTS["amount"] = SORTS["largest"]
 
 
 def list_candidates(
@@ -336,7 +358,8 @@ def list_candidates(
     min_amount: int | None = None,
     max_amount: int | None = None,
     limit: int | None = None,
-    sort: str = "date",
+    sort: str = "newest",
+    states: list[str] | None = None,
 ) -> list[StoredCandidate]:
     """
     List judgements, newest filing first.
@@ -404,13 +427,18 @@ def list_candidates(
         )
         parameters.extend([f"%{escape_like(word)}%"] * len(SEARCHED_FIELDS))
 
+    if states:
+        placeholders = ", ".join("?" for _ in states)
+        clauses.append(f"state IN ({placeholders})")
+        parameters.extend(states)
+
     if clauses:
         query.append("WHERE " + " AND ".join(clauses))
 
     # Sorted in SQL, before the limit, so "largest raise" means the largest of
     # everything that matches, not of whichever rows happened to load. Rows with
     # no amount or no state go last rather than first.
-    query.append(f"ORDER BY {SORTS.get(sort, SORTS['date'])}")
+    query.append(f"ORDER BY {SORTS.get(sort, SORTS['newest'])}")
 
     if limit is not None:
         query.append("LIMIT ?")
