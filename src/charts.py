@@ -227,7 +227,20 @@ def plan_question(question: str, domains: list[str], today: str, planner: PlanFu
 
     try:
         start, end = raw.index("{"), raw.rindex("}") + 1
-        plan = Plan.model_validate(without_nulls(json.loads(raw[start:end])))
+        data = without_nulls(json.loads(raw[start:end]))
+
+        # A limit is a count to show, not a choice: 0 means "not applicable" to
+        # the model, and past the cap means "as many as you can". Neither should
+        # fail a chart.
+        if isinstance(data, dict) and "limit" in data:
+            limit = data["limit"]
+
+            if not isinstance(limit, int) or limit < 1:
+                data.pop("limit")
+            elif limit > MAX_BARS:
+                data["limit"] = MAX_BARS
+
+        plan = Plan.model_validate(data)
     except (ValueError, json.JSONDecodeError, ValidationError) as exc:
         raise ChartError("Couldn't work out a chart for that. Try rephrasing it.") from exc
 
