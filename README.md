@@ -84,9 +84,11 @@ Three things, all of them boring, which is why nobody builds for them:
 
 ## What it's found
 
-Since June 2026 it has archived over 23,000 Form D filings and judged around a
-thousand companies across six domains. Five are public examples — AI infra, AI
-tools, Energy, Fintech and Healthcare — and one is private.
+Since June 2026 it has archived over 23,000 Form D filings and looked at about
+1,800 companies — 4,700 judgements across six domains, since a company can be
+judged by more than one. Five domains are public examples (AI infra, AI tools,
+Energy, Fintech, Healthcare) and one is private. About 230 of those judgements are
+fits.
 
 The first run, against healthcare filings from 1 June to 11 August, is the one that
 showed what the ratio feels like:
