@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 
 /**
@@ -17,6 +18,15 @@ export default async function LoginPage({
   return (
     <Suspense>
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-8">
+        {/* Back to the choice between reading as a guest and signing in —
+            where someone who signed out, or came here by mistake, wants to be. */}
+        <Link
+          href="/welcome"
+          className="mb-8 inline-flex items-center gap-2 text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+        >
+          <span aria-hidden>←</span> Back
+        </Link>
+
         <h1 className="font-display text-[1.75rem] leading-none tracking-tight">
           Deal Radar
         </h1>
