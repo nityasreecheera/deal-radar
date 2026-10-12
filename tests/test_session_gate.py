@@ -83,6 +83,16 @@ def test_get_started_lets_a_visitor_in() -> None:
         assert client.get("/").status_code == 200
 
 
+def test_exit_takes_a_visitor_back_to_the_introduction() -> None:
+    with httpx.Client(base_url=SITE, timeout=10, follow_redirects=False) as client:
+        client.get("/start")
+        left = client.get("/leave")
+
+        assert left.status_code == 303
+        assert left.headers["location"] == "/welcome"
+        assert "/welcome" in client.get("/").headers["location"]
+
+
 def test_the_criteria_page_asks_a_visitor_to_sign_in() -> None:
     response = httpx.get(f"{SITE}/criteria", timeout=10, follow_redirects=False)
 
