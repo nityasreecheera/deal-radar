@@ -121,8 +121,9 @@ export function formatAmount(amount: number | null | undefined): string {
 }
 
 export function formatLocation(candidate: Candidate): string {
+  // Filings shout ("SAN CARLOS"); each word is capitalised, not just the first.
   const city = candidate.city
-    ? candidate.city.charAt(0) + candidate.city.slice(1).toLowerCase()
+    ? candidate.city.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_, gap: string, letter: string) => gap + letter.toUpperCase())
     : "";
   const state = candidate.state ?? "";
 

@@ -486,13 +486,15 @@ function CandidateList() {
           )}
 
           <div className="ml-auto flex items-baseline gap-5">
-            {(since || until) && (
+            {(since || until || country || state || params.get("sort")) && (
               <button
                 type="button"
-                onClick={() => setFilters({ since: null, until: null })}
+                onClick={() =>
+                  setFilters({ since: null, until: null, country: null, state: null, sort: null })
+                }
                 className="text-[0.75rem] text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
               >
-                clear dates
+                clear filters
               </button>
             )}
 
