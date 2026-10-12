@@ -25,6 +25,7 @@ export type ChartAnswer = {
   categories: string[];
   series: { name: string; values: (number | null)[] }[];
   colour_by: "series" | "verdict" | "single";
+  marks?: string[];
   columns: string[];
   rows: string[][];
   note?: string | null;
@@ -90,6 +91,11 @@ export function Chart({ answer }: { answer: ChartAnswer }) {
 
   const legend = answer.series.length > 1;
 
+  // Bars that are companies, each coloured by its verdict: the legend names the
+  // verdicts present, in their usual order.
+  const marks = answer.marks ?? [];
+  const verdictLegend = Object.keys(VERDICT).filter((verdict) => marks.includes(verdict));
+
   return (
     <figure className="rounded border border-[var(--color-rule)] bg-[var(--color-paper-raised)] p-4">
       <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -107,6 +113,17 @@ export function Chart({ answer }: { answer: ChartAnswer }) {
           {asTable ? "Show as chart" : "Show as table"}
         </button>
       </figcaption>
+
+      {verdictLegend.length > 0 && !asTable && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.75rem] text-[var(--color-ink-soft)]">
+          {verdictLegend.map((verdict) => (
+            <span key={verdict} className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: VERDICT[verdict] }} />
+              {verdict}
+            </span>
+          ))}
+        </div>
+      )}
 
       {legend && !asTable && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[0.75rem] text-[var(--color-ink-soft)]">
@@ -169,8 +186,9 @@ function Bars({ answer, onTip }: { answer: ChartAnswer; onTip: (tip: Tip) => voi
         const value = values[index] ?? 0;
         const length = (value / max) * plot;
         const y = index * rowHeight + 4;
+        const verdict = answer.marks?.[index];
         const fill =
-          answer.colour_by === "verdict" ? (VERDICT[category] ?? INK) : INK;
+          answer.colour_by === "verdict" ? (VERDICT[verdict ?? category] ?? INK) : INK;
 
         return (
           <g
@@ -180,7 +198,7 @@ function Bars({ answer, onTip }: { answer: ChartAnswer; onTip: (tip: Tip) => voi
               onTip({
                 x: ((labelWidth + length / 2) / width) * box.width,
                 y: (y / height) * box.height,
-                label: category,
+                label: verdict ? `${category} · ${verdict}` : category,
                 value: format(values[index], answer.unit),
               });
             }}
