@@ -295,21 +295,13 @@ function CandidateList() {
           </span>
 
           <p className="label">
-            {meta ? (
+            {owner && (
               <>
-                {owner && (
-                  <>
-                    <span className="tabular text-[var(--color-ink)]">{unread}</span>{" "}
-                    unread
-                    <span className="mx-2 text-[var(--color-rule)]">/</span>
-                  </>
-                )}
-                <span className="tabular">{meta.companies_known}</span> known
+                <span className="tabular text-[var(--color-ink)]">{unread}</span>{" "}
+                unread
+                <span className="mx-2 text-[var(--color-rule)]">/</span>
               </>
-            ) : (
-              "loading"
             )}
-            <span className="mx-2 text-[var(--color-rule)]">/</span>
             {owner ? <LogoutButton /> : <ExitLink />}
           </p>
         </div>
