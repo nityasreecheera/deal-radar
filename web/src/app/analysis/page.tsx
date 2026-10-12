@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ChartAsk } from "@/components/ChartAsk";
 
 import {
   type Analysis,
@@ -151,6 +152,9 @@ export default function AnalysisPage() {
       </header>
 
       <main className="mx-auto w-full max-w-4xl flex-1 space-y-12 px-8 py-10">
+        {/* First, because a question asked is the reason someone opened the page. */}
+        <ChartAsk />
+
         {/* Every domain at a glance. First, because "what am I even covering"
             comes before any number about one of them. */}
         {domains.length > 1 && !domain && (

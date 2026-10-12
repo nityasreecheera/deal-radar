@@ -46,6 +46,15 @@ from src.candidates import (
     source_breakdown,
     save_profile,
 )
+from src.charts import (
+    CHART_MODEL,
+    ChartAnswer,
+    ChartError,
+    ChartLimit,
+    check_chart_allowance,
+    draw,
+    plan_question,
+)
 from src.chat import ChatAnswer, ChatError, answer_question
 from src.funding import (
     FundingRound,
@@ -422,6 +431,63 @@ def remove_visitor_domain(theme: str) -> dict:
             )
 
     return {"deleted": theme}
+
+
+class ChartQuestion(BaseModel):
+    question: str = Field(min_length=1, max_length=300)
+
+
+def chart_planner():
+    """The model that turns a question into a plan. A seam for the tests."""
+    from src.judge import create_openai_compatible_judge
+
+    return create_openai_compatible_judge(model=CHART_MODEL)
+
+
+@app.post(
+    "/api/charts",
+    response_model=ChartAnswer,
+    responses={422: {"model": ErrorBody}, 429: {"model": ErrorBody}, 503: {"model": ErrorBody}},
+)
+def ask_for_chart(body: ChartQuestion) -> ChartAnswer:
+    """
+    A chart from a plain-English question, drawn from what this viewer may read.
+
+    The model only plans; every figure is computed here, through the viewer's own
+    connection, so a visitor's chart cannot include anything they could not see.
+    See src/charts.py.
+    """
+    from datetime import UTC, datetime
+
+    with closing(connect()) as connection:
+        if is_public():
+            found = visitor_id()
+
+            if found is None:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"ok": False, "errors": ["Open the site in a browser to ask for charts."]},
+                )
+
+            try:
+                check_chart_allowance(connection, found)
+            except ChartLimit as exc:
+                raise HTTPException(status_code=429, detail={"ok": False, "errors": [str(exc)]}) from exc
+
+        domains = sorted(set(visible(available_themes())) | set(known_themes(connection)))
+
+        try:
+            plan = plan_question(
+                body.question, domains, datetime.now(UTC).date().isoformat(), chart_planner()
+            )
+            return draw(connection, plan)
+        except ChartError as exc:
+            raise HTTPException(status_code=422, detail={"ok": False, "errors": [str(exc)]}) from exc
+        except Exception as exc:  # noqa: BLE001 — the model or its provider failed
+            raise HTTPException(
+                status_code=503,
+                detail={"ok": False, "errors": ["Charts are unavailable just now. Try again shortly."]},
+            ) from exc
 
 
 @app.get("/api/health")

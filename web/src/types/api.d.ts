@@ -91,6 +91,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/charts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask For Chart
+         * @description A chart from a plain-English question, drawn from what this viewer may read.
+         *
+         *     The model only plans; every figure is computed here, through the viewer's own
+         *     connection, so a visitor's chart cannot include anything they could not see.
+         *     See src/charts.py.
+         */
+        post: operations["ask_for_chart_api_charts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -743,6 +767,50 @@ export interface components {
             fitted: number;
         };
         /**
+         * ChartAnswer
+         * @description A chart and the table behind it, ready to draw.
+         */
+        ChartAnswer: {
+            /** Title */
+            title: string;
+            /**
+             * Subtitle
+             * @default
+             */
+            subtitle: string;
+            /**
+             * Form
+             * @enum {string}
+             */
+            form: "bar" | "line" | "grouped" | "none";
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "count" | "usd" | "mixed";
+            /** Categories */
+            categories?: string[];
+            /** Series */
+            series?: components["schemas"]["Series"][];
+            /**
+             * Colour By
+             * @default single
+             * @enum {string}
+             */
+            colour_by: "series" | "verdict" | "single";
+            /** Columns */
+            columns?: string[];
+            /** Rows */
+            rows?: string[][];
+            /** Note */
+            note?: string | null;
+        };
+        /** ChartQuestion */
+        ChartQuestion: {
+            /** Question */
+            question: string;
+        };
+        /**
          * ChatAnswer
          * @description An answer, with the judgements it was allowed to see.
          */
@@ -1193,6 +1261,13 @@ export interface components {
             /** Missing Days */
             missing_days?: string[];
             running?: components["schemas"]["ManualRun"] | null;
+        };
+        /** Series */
+        Series: {
+            /** Name */
+            name: string;
+            /** Values */
+            values: (number | null)[];
         };
         /**
          * Signal
@@ -1686,6 +1761,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_for_chart_api_charts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChartQuestion"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChartAnswer"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };
