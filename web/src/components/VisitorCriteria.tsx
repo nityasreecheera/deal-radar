@@ -233,7 +233,7 @@ export function VisitorCriteria() {
       <section>
         <p className="max-w-2xl text-sm leading-relaxed text-[var(--color-ink-soft)]">
           Write what you&apos;re looking for, and the radar judges companies it already
-          knows against it — about 15 at a time, in roughly half a minute. Your domains
+          knows against it — about 15 at a time, in a few seconds. Your domains
           appear in the dropdown on the companies page, and only you can see them, in
           this browser.
         </p>
