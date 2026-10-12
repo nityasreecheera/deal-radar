@@ -147,6 +147,11 @@ class ChartAnswer(BaseModel):
     # Colours follow verdicts when the bars are verdicts, so "fits" is the same
     # colour in every chart; otherwise by series order.
     colour_by: Literal["series", "verdict", "single"] = "single"
+    # One verdict label per bar, when the bars are companies rather than
+    # verdicts: a ranking of everything a domain looked at mixes fits with
+    # rejections, and colouring each bar is what keeps that from reading as a
+    # list of picks.
+    marks: list[str] = Field(default_factory=list)
     columns: list[str] = Field(default_factory=list)
     rows: list[list[str]] = Field(default_factory=list)
     note: str | None = None
@@ -440,14 +445,20 @@ def top(connection: sqlite3.Connection, plan: Plan) -> ChartAnswer:
     label = {"raise": "Being raised", "sold": "Sold so far", "investors": "Investors"}[plan.top_measure]
     values = [float(getattr(row, field)) for row in ranked]
 
+    scope = describe_filters(plan.filters)
+
+    if not plan.filters.verdicts:
+        scope = f"{scope} · all verdicts" if scope else "All verdicts"
+
     return ChartAnswer(
         title=f"Top {len(ranked)} by {label.lower()}",
-        subtitle=describe_filters(plan.filters),
+        subtitle=scope,
         form="bar",
         unit="usd" if usd else "count",
         categories=[row.company_name for row in ranked],
         series=[Series(name=label, values=values)],
-        colour_by="single",
+        colour_by="verdict",
+        marks=[VERDICT_LABEL[verdict_of(row)] for row in ranked],
         columns=["Company", label, "Verdict", "Filed"],
         rows=[
             [row.company_name, money(v) if usd else str(int(v)), VERDICT_LABEL[verdict_of(row)], row.filed_date]

@@ -802,6 +802,8 @@ export interface components {
              * @enum {string}
              */
             colour_by: "series" | "verdict" | "single";
+            /** Marks */
+            marks?: string[];
             /** Columns */
             columns?: string[];
             /** Rows */
