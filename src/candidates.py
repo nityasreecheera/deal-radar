@@ -317,6 +317,14 @@ def find_by_company(
     return [StoredCandidate(**dict(row)) for row in rows]
 
 
+# How a list can be ordered. Fixed strings, never built from a request.
+SORTS = {
+    "date": "filed_date DESC, offering_amount DESC",
+    "amount": "offering_amount IS NULL, offering_amount DESC, filed_date DESC",
+    "state": "state IS NULL OR state = '', state ASC, filed_date DESC",
+}
+
+
 def list_candidates(
     connection: sqlite3.Connection,
     verdicts: list[str] | None = None,
@@ -328,6 +336,7 @@ def list_candidates(
     min_amount: int | None = None,
     max_amount: int | None = None,
     limit: int | None = None,
+    sort: str = "date",
 ) -> list[StoredCandidate]:
     """
     List judgements, newest filing first.
@@ -398,7 +407,10 @@ def list_candidates(
     if clauses:
         query.append("WHERE " + " AND ".join(clauses))
 
-    query.append("ORDER BY filed_date DESC, offering_amount DESC")
+    # Sorted in SQL, before the limit, so "largest raise" means the largest of
+    # everything that matches, not of whichever rows happened to load. Rows with
+    # no amount or no state go last rather than first.
+    query.append(f"ORDER BY {SORTS.get(sort, SORTS['date'])}")
 
     if limit is not None:
         query.append("LIMIT ?")

@@ -77,6 +77,7 @@ export type CandidateFilters = {
   unreadOnly?: boolean;
   q?: string;
   limit?: number;
+  sort?: "date" | "amount" | "state";
 };
 
 export function buildQuery(filters: CandidateFilters): string {
@@ -92,6 +93,7 @@ export function buildQuery(filters: CandidateFilters): string {
   if (filters.unreadOnly) params.set("unread_only", "true");
   if (filters.q) params.set("q", filters.q);
   if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.sort && filters.sort !== "date") params.set("sort", filters.sort);
 
   const query = params.toString();
 

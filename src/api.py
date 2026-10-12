@@ -14,6 +14,7 @@ import time
 from collections import deque
 from contextlib import closing
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -544,6 +545,7 @@ def get_candidates(
     unread_only: bool = False,
     q: str = Query(default="", max_length=200),
     limit: int = Query(default=100, ge=1, le=500),
+    sort: Literal["date", "amount", "state"] = "date",
 ) -> CandidateList:
     """
     Judgements, filtered. Every parameter is optional and combines.
@@ -569,6 +571,7 @@ def get_candidates(
             min_amount=parsed.min_amount,
             max_amount=parsed.max_amount,
             limit=limit,
+            sort=sort,
         )
 
         return CandidateList(
