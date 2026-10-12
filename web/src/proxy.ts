@@ -75,7 +75,7 @@ const OWNER_API_PATHS = [
 
 // The only writes a visitor may make: their own domains. The API keys these by
 // the visitor's id and keeps them out of the owner's record entirely.
-const VISITOR_WRITES = ["/api/visitor"];
+const VISITOR_WRITES = ["/api/visitor", "/api/charts"];
 
 const OWNER_PAGES: string[] = [];
 
