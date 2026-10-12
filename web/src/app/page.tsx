@@ -17,6 +17,7 @@ import {
   type Candidate,
   type CandidateList,
   type Meta,
+  type Sort,
 } from "@/lib/api";
 
 /**
@@ -57,7 +58,13 @@ function CandidateList() {
   const theme = params.get("theme") ?? "";
   const since = params.get("since") ?? "";
   const until = params.get("until") ?? "";
-  const sort = (params.get("sort") ?? "date") as "date" | "amount" | "state";
+  // "date" and "amount" were this sort's first names; old links still arrive with them.
+  const rawSort = params.get("sort") ?? "newest";
+  const sort = (
+    { date: "newest", amount: "largest" } as Record<string, Sort>
+  )[rawSort] ?? (rawSort as Sort);
+  const country = params.get("country") ?? "";
+  const state = params.get("state") ?? "";
   const unreadOnly = params.get("unread") === "1";
   const search = params.get("q") ?? "";
 
@@ -109,11 +116,13 @@ function CandidateList() {
         since: since || undefined,
         until: until || undefined,
         sort,
+        country: country || undefined,
+        state: state || undefined,
         unreadOnly,
         q: search || undefined,
         limit: 200,
       }),
-    [verdicts, searchingAll, theme, since, until, sort, unreadOnly, search],
+    [verdicts, searchingAll, theme, since, until, sort, country, state, unreadOnly, search],
   );
 
   // Which domains found each company interesting. Built before the collapse,
@@ -273,6 +282,16 @@ function CandidateList() {
 
   const unread = meta?.unread ?? 0;
 
+  // Countries in the data, the United States first because most filers are
+  // there; then states or provinces within the chosen one, where it has them.
+  const regions = meta?.states ?? [];
+  const countries = [...new Set(regions.map((region) => region.country))].sort((a, b) =>
+    a === "United States" ? -1 : b === "United States" ? 1 : a.localeCompare(b),
+  );
+  const subdivisions = regions
+    .filter((region) => region.country === country && region.subdivision)
+    .sort((a, b) => (a.subdivision ?? "").localeCompare(b.subdivision ?? ""));
+
   // Visitors read; only the owner reads what they have read, edits criteria, or
   // asks the paid question box. Unknown until meta arrives, and treated as a
   // visitor until then.
@@ -353,15 +372,78 @@ function CandidateList() {
             <select
               value={sort}
               onChange={(event) =>
-                setFilters({ sort: event.target.value === "date" ? null : event.target.value })
+                setFilters({ sort: event.target.value === "newest" ? null : event.target.value })
               }
               className="field pr-6"
             >
-              <option value="date">Newest first</option>
-              <option value="amount">Largest raise</option>
-              <option value="state">State (A–Z)</option>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="largest">Largest raise</option>
+              <option value="smallest">Smallest raise</option>
+              <option value="state">Location (A–Z)</option>
             </select>
           </label>
+
+          <label>
+            <span className="label mb-1 block">From</span>
+            <input
+              type="date"
+              value={since}
+              min={meta?.earliest_filing ?? undefined}
+              max={until || (meta?.latest_filing ?? undefined)}
+              onChange={(event) => setFilters({ since: event.target.value || null })}
+              className="field tabular"
+            />
+          </label>
+
+          <label>
+            <span className="label mb-1 block">To</span>
+            <input
+              type="date"
+              value={until}
+              min={since || (meta?.earliest_filing ?? undefined)}
+              max={meta?.latest_filing ?? undefined}
+              onChange={(event) => setFilters({ until: event.target.value || null })}
+              className="field tabular"
+            />
+          </label>
+
+          <label>
+            <span className="label mb-1 block">Country</span>
+            <select
+              value={country}
+              // A state belongs to one country, so changing country clears it.
+              onChange={(event) => setFilters({ country: event.target.value || null, state: null })}
+              className="field pr-6"
+            >
+              <option value="">All countries</option>
+              {countries.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {subdivisions.length > 0 && (
+            <label>
+              <span className="label mb-1 block">
+                {country === "Canada" ? "Province" : "State"}
+              </span>
+              <select
+                value={state}
+                onChange={(event) => setFilters({ state: event.target.value || null })}
+                className="field pr-6"
+              >
+                <option value="">All</option>
+                {subdivisions.map((region) => (
+                  <option key={region.code} value={region.code}>
+                    {region.subdivision}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {/* A verdict belongs to a thesis, so it has no meaning until one is
               chosen. Across all domains the same company is fits in Energy and

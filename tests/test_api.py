@@ -785,3 +785,53 @@ def test_the_list_sorts_by_date_amount_or_state() -> None:
 
 def test_an_unknown_sort_is_refused() -> None:
     assert client.get("/api/candidates", params={"sort": "valuation"}).status_code == 422
+
+
+# --- where companies are ----------------------------------------------------------
+
+def located_seed() -> None:
+    def make(name, accession, state, amount=5_000_000, filed="2026-09-01"):
+        c = candidate(name=name, accession=accession, amount=amount, filed_date=filed)
+        return c.model_copy(update={"filing": c.filing.model_copy(update={"state": state})})
+
+    seed(
+        make("Austin Co", "acc-tx", "TX", 9_000_000, "2026-08-01"),
+        make("Bay Co", "acc-ca", "CA", 1_000_000, "2026-09-15"),
+        make("Vancouver Co", "acc-bc", "A1", 3_000_000, "2026-09-01"),
+        make("Toronto Co", "acc-on", "A6", 2_000_000, "2026-07-01"),
+        make("London Co", "acc-uk", "X0", 7_000_000, "2026-08-20"),
+    )
+
+
+def names_for(**params) -> list[str]:
+    return [c["company_name"] for c in client.get("/api/candidates", params=params).json()["candidates"]]
+
+
+def test_filtering_by_country_and_state() -> None:
+    located_seed()
+
+    assert set(names_for(country="Canada")) == {"Vancouver Co", "Toronto Co"}
+    assert names_for(country="Canada", state="A6") == ["Toronto Co"]
+    assert names_for(country="United Kingdom") == ["London Co"]
+    assert set(names_for(country="United States")) == {"Austin Co", "Bay Co"}
+    assert names_for(country="Atlantis") == []
+
+
+def test_sorting_both_ways_and_combining_filters() -> None:
+    located_seed()
+
+    assert names_for(sort="smallest")[0] == "Bay Co"
+    assert names_for(sort="largest")[0] == "Austin Co"
+    assert names_for(sort="oldest")[0] == "Toronto Co"
+    assert names_for(country="Canada", sort="largest", since="2026-08-01") == ["Vancouver Co"]
+
+
+def test_meta_names_every_place_with_its_country() -> None:
+    located_seed()
+
+    places = {r["code"]: r for r in client.get("/api/meta").json()["states"]}
+
+    assert places["A1"]["country"] == "Canada"
+    assert places["A1"]["subdivision"] == "British Columbia"
+    assert places["X0"]["name"] == "United Kingdom"
+    assert places["TX"]["subdivision"] == "Texas"

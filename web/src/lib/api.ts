@@ -77,8 +77,12 @@ export type CandidateFilters = {
   unreadOnly?: boolean;
   q?: string;
   limit?: number;
-  sort?: "date" | "amount" | "state";
+  sort?: Sort;
+  state?: string;
+  country?: string;
 };
+
+export type Sort = "newest" | "oldest" | "largest" | "smallest" | "state";
 
 export function buildQuery(filters: CandidateFilters): string {
   const params = new URLSearchParams();
@@ -93,7 +97,9 @@ export function buildQuery(filters: CandidateFilters): string {
   if (filters.unreadOnly) params.set("unread_only", "true");
   if (filters.q) params.set("q", filters.q);
   if (filters.limit) params.set("limit", String(filters.limit));
-  if (filters.sort && filters.sort !== "date") params.set("sort", filters.sort);
+  if (filters.sort && filters.sort !== "newest") params.set("sort", filters.sort);
+  if (filters.country) params.set("country", filters.country);
+  if (filters.state) params.set("state", filters.state);
 
   const query = params.toString();
 
@@ -120,9 +126,16 @@ export function formatLocation(candidate: Candidate): string {
     : "";
   const state = candidate.state ?? "";
 
-  if (city && state) return `${city}, ${state}`;
+  // A US address reads as "Austin, TX". Anywhere else, the code means nothing to
+  // a reader — A1 is British Columbia — so the place is spelled out.
+  const place =
+    candidate.country && candidate.country !== "United States"
+      ? [candidate.subdivision, candidate.country].filter(Boolean).join(", ")
+      : state;
 
-  return city || state || "location unknown";
+  if (city && place) return `${city}, ${place}`;
+
+  return city || place || "location unknown";
 }
 
 /**
