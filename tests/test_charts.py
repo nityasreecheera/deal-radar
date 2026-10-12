@@ -124,18 +124,30 @@ def test_top_ranks_by_the_measure_asked_for() -> None:
     assert body["categories"] == ["Tenstorrent Holdings", "Fab2, Inc."]
 
 
+def test_a_ranking_is_of_fits_unless_asked_otherwise() -> None:
+    body = ask("top 10", {"kind": "top", "top_measure": "raise", "limit": 10}, headers=VISITOR).json()
+
+    # Small Co is a no fit to a visitor (the owner's overrule is private), so it is left out.
+    assert "Small Co" not in body["categories"]
+    assert body["subtitle"].startswith("Fits")
+
+
+def test_a_ranking_of_everything_when_asked() -> None:
+    body = ask(
+        "top 10 of everything",
+        {"kind": "top", "top_measure": "raise", "filters": {"verdicts": ["fits", "maybe", "unknown", "no_fit"]}},
+        headers=VISITOR,
+    ).json()
+
+    assert "Small Co" in body["categories"]
+    assert "all verdicts" in body["subtitle"]
+
+
 def test_a_ranking_shows_each_companys_verdict() -> None:
     body = ask("top 3", {"kind": "top", "top_measure": "raise", "limit": 3, "filters": {"domain": "AI infra"}}).json()
 
     assert body["colour_by"] == "verdict"
     assert body["marks"] == ["Fits", "Fits", "Fits"]  # owner sees their own overrule on Small Co
-    assert "all verdicts" in body["subtitle"]
-
-
-def test_a_ranking_of_one_verdict_does_not_say_all_verdicts() -> None:
-    body = ask("top fits", {"kind": "top", "top_measure": "raise", "filters": {"verdicts": ["fits"]}}).json()
-
-    assert "all verdicts" not in body["subtitle"]
 
 
 # --- what a visitor's chart may contain -------------------------------------------

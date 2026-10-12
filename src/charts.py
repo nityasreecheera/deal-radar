@@ -179,6 +179,9 @@ measure: "count" | "total_raise" | "median_raise" | "total_sold"   (breakdown)
 by: "verdict" | "domain" | "month" | "state" | "category" | "industry" | "raise_size"   (breakdown)
 top_measure: "raise" | "sold" | "investors"   (top)
 limit: 1-20   (top; default 10)
+For "top", leave verdicts empty unless the question names verdicts: a ranking
+means the fits. If it asks for everything ("all companies", "any verdict",
+"including rejected"), set verdicts to all four.
 filters: {"domain": one of the domains listed below or null,
           "verdicts": subset of ["fits","maybe","unknown","no_fit"],
           "since": "YYYY-MM-DD" or null, "until": "YYYY-MM-DD" or null,
@@ -430,6 +433,11 @@ def breakdown(connection: sqlite3.Connection, plan: Plan) -> ChartAnswer:
 
 
 def top(connection: sqlite3.Connection, plan: Plan) -> ChartAnswer:
+    # "Top" means the best of them, so a ranking is of fits unless the question
+    # asked for other verdicts.
+    if not plan.filters.verdicts:
+        plan.filters.verdicts = ["fits"]
+
     rows = unique_companies(rows_for(connection, plan.filters))
     field = {"raise": "offering_amount", "sold": "amount_sold", "investors": "investor_count"}[plan.top_measure]
     ranked = sorted(
@@ -447,8 +455,8 @@ def top(connection: sqlite3.Connection, plan: Plan) -> ChartAnswer:
 
     scope = describe_filters(plan.filters)
 
-    if not plan.filters.verdicts:
-        scope = f"{scope} · all verdicts" if scope else "All verdicts"
+    if set(plan.filters.verdicts) == set(VERDICT_ORDER):
+        scope = scope.replace(" & ".join(VERDICT_LABEL[v] for v in plan.filters.verdicts), "all verdicts")
 
     return ChartAnswer(
         title=f"Top {len(ranked)} by {label.lower()}",
