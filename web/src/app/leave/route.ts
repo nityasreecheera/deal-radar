@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 /**
- * "Exit" for a visitor: forget "Get started" and go back to the introduction.
+ * "Exit" for a visitor: forget "Continue as guest" and go back to the introduction.
  *
  * A visitor has no session to end — reading is open to everyone — so this only
  * clears the cookie that skips the introduction. The owner's "Sign out" is a

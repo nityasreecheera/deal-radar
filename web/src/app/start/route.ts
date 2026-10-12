@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * "Get started": remember that this visitor has seen the introduction, and take
+ * "Continue as guest": remember that this visitor has seen the introduction, and take
  * them to the companies.
  *
  * The cookie grants nothing — it only stops the home page redirecting to

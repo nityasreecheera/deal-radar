@@ -40,12 +40,12 @@ const VIEWER_HEADER = "x-radar-viewer";
 
 // An anonymous id per browser, so the domains a visitor writes come back to them
 // and nobody else. Random, never tied to a person, and separate from the
-// "Get started" cookie so Exit does not throw a visitor's domains away.
+// "Continue as guest" cookie so Exit does not throw a visitor's domains away.
 const VISITOR_ID_HEADER = "x-radar-visitor-id";
 const VISITOR_ID_COOKIE = "radar_vid";
 const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Set by the landing page's "Get started", so a returning visitor goes straight
+// Set by the landing page's "Continue as guest", so a returning visitor goes straight
 // to the companies instead of the introduction each time.
 const VISITOR_COOKIE = "radar_visitor";
 
@@ -226,7 +226,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  // A first visit lands on the introduction; "Get started" sets the cookie
+  // A first visit lands on the introduction; "Continue as guest" sets the cookie
   // that skips it from then on.
   if (pathname === "/" && !request.cookies.get(VISITOR_COOKIE)) {
     return NextResponse.redirect(new URL("/welcome", request.url));
