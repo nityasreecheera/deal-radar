@@ -54,12 +54,12 @@ echo "Waiting for the site..."
 code=000
 
 for _ in $(seq 1 40); do
-  # Checked against the API rather than the homepage. A person without a
-  # session is now redirected to a login form, so the homepage answers 307 —
-  # correct behaviour, but indistinguishable here from a working site. The API
-  # still answers 401, which is the thing worth proving before publishing.
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
-    http://127.0.0.1:3100/api/meta 2>/dev/null || echo 000)
+  # Checked with a write rather than a read. The site is public to read, so a
+  # page or a GET proves nothing; a write refused without credentials is the
+  # thing worth proving before publishing, because /api/chat spends money and
+  # every write changes the owner's record.
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -X POST \
+    http://127.0.0.1:3100/api/viewed 2>/dev/null || echo 000)
 
   # 401 is the expected answer: it proves the password gate is active.
   if [ "$code" = "401" ]; then
@@ -68,7 +68,7 @@ for _ in $(seq 1 40); do
   fi
 
   if [ "$code" = "200" ]; then
-    echo "  API answered 200 without credentials — the gate is NOT active."
+    echo "  A write was accepted without credentials — the gate is NOT active."
     echo "  Refusing to publish a chat endpoint that spends money."
     tmux kill-session -t "$SESSION" 2>/dev/null || true
     exit 1

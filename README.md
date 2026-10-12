@@ -23,9 +23,13 @@ What's worth a look if you're reading the code:
   because twelve of the first twenty maybes turned out to mean "couldn't find out."
 - **Your judgement overrides the model's, and both are kept,** so how often you
   disagree with it is a number rather than a feeling.
+- **Public to read, private to change.** Anyone can browse the judgements. A
+  visitor's database connection reads through views that leave out private
+  domains and the owner's own notes, so no endpoint can leak them by forgetting
+  a filter. Writing, spending and the criteria stay behind sign-in.
 - **Access without accounts.** Invite links and read-only API tokens are signed
   and expire on their own. Nothing is stored server-side.
-- **444 tests that run offline.**
+- **Over 500 tests that run offline.**
 
 [DEVELOPING.md](DEVELOPING.md) covers the architecture and, more usefully, the
 things real filings forced me to change.
@@ -117,8 +121,8 @@ tier. The only real cost is the model that reads each company, and that's roughl
 two dollars at this volume.
 
 It runs on a small cloud server on a schedule. Nothing has to be open and nothing
-has to be running. The site sits at a fixed address behind a password, and both it
-and the daily run come back on their own after a reboot.
+has to be running. The site sits at a fixed address, open for anyone to read, and
+both it and the daily run come back on their own after a reboot.
 
 ## How it works
 
@@ -189,7 +193,7 @@ problem.
 ## Where it honestly stands
 
 It runs end to end against live filings, on a schedule, and emails the result.
-444 tests that run offline.
+Over 500 tests that run offline.
 
 **The thesis is still a placeholder.** The criteria it currently judges against are
 a reasonable guess and nothing more — healthcare AI and clinical software, with a

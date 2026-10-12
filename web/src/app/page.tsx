@@ -7,6 +7,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AskBox } from "@/components/AskBox";
 import { CandidateRow } from "@/components/CandidateRow";
 import { LogoutButton } from "@/components/LogoutButton";
+import { SignInLink } from "@/components/SignInLink";
 import { SearchBox } from "@/components/SearchBox";
 import {
   VERDICTS,
@@ -257,6 +258,11 @@ function CandidateList() {
 
   const unread = meta?.unread ?? 0;
 
+  // Visitors read; only the owner reads what they have read, edits criteria, or
+  // asks the paid question box. Unknown until meta arrives, and treated as a
+  // visitor until then.
+  const owner = meta?.viewer === "owner";
+
   // Handed to each row so the company page can send you back to this exact list.
   const from = params.toString();
 
@@ -269,12 +275,14 @@ function CandidateList() {
           </h1>
 
           <span className="flex items-baseline gap-5">
-            <Link
-              href="/criteria"
-              className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
-            >
-              Criteria
-            </Link>
+            {owner && (
+              <Link
+                href="/criteria"
+                className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+              >
+                Criteria
+              </Link>
+            )}
             <Link
               href="/analysis"
               className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
@@ -286,16 +294,20 @@ function CandidateList() {
           <p className="label">
             {meta ? (
               <>
-                <span className="tabular text-[var(--color-ink)]">{unread}</span>{" "}
-                unread
-                <span className="mx-2 text-[var(--color-rule)]">/</span>
+                {owner && (
+                  <>
+                    <span className="tabular text-[var(--color-ink)]">{unread}</span>{" "}
+                    unread
+                    <span className="mx-2 text-[var(--color-rule)]">/</span>
+                  </>
+                )}
                 <span className="tabular">{meta.companies_known}</span> known
               </>
             ) : (
               "loading"
             )}
             <span className="mx-2 text-[var(--color-rule)]">/</span>
-            <LogoutButton />
+            {owner ? <LogoutButton /> : <SignInLink />}
           </p>
         </div>
       </header>
@@ -383,17 +395,19 @@ function CandidateList() {
             })}
           </div>
 
-          <label className="flex items-center gap-2 text-[0.75rem] text-[var(--color-ink-soft)]">
-            <input
-              type="checkbox"
-              checked={unreadOnly}
-              onChange={(event) =>
-                setFilters({ unread: event.target.checked ? "1" : null })
-              }
-              className="accent-[var(--color-ink)]"
-            />
-            Unread only
-          </label>
+          {owner && (
+            <label className="flex items-center gap-2 text-[0.75rem] text-[var(--color-ink-soft)]">
+              <input
+                type="checkbox"
+                checked={unreadOnly}
+                onChange={(event) =>
+                  setFilters({ unread: event.target.checked ? "1" : null })
+                }
+                className="accent-[var(--color-ink)]"
+              />
+              Unread only
+            </label>
+          )}
 
           <div className="ml-auto flex items-baseline gap-5">
             {(since || until) && (
@@ -406,7 +420,7 @@ function CandidateList() {
               </button>
             )}
 
-            {unread > 0 && (
+            {owner && unread > 0 && (
               <button
                 type="button"
                 onClick={() => void markAllRead()}
@@ -456,7 +470,7 @@ function CandidateList() {
         )}
       </main>
 
-      <AskBox theme={theme || null} />
+      {owner && <AskBox theme={theme || null} />}
     </div>
   );
 }

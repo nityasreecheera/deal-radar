@@ -27,6 +27,7 @@ function empty(): Thesis {
     include: [],
     exclude: [],
     sec_industry_groups: ["Other Technology"],
+    public: true,
   };
 }
 
@@ -211,7 +212,12 @@ function Summary({
   return (
     <section className="border-t-2 border-[var(--color-ink)] pt-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h2 className="font-display text-[1.125rem]">{thesis.domain}</h2>
+        <h2 className="font-display text-[1.125rem]">
+          {thesis.domain}
+          {thesis.public === false && (
+            <span className="label ml-3 align-middle">Hidden from visitors</span>
+          )}
+        </h2>
 
         <div className="flex items-baseline gap-4 text-[0.8125rem]">
           <button
@@ -396,6 +402,19 @@ function Editor({
             className="field w-48 tabular"
           />
         </Field>
+
+        <label className="flex items-center gap-2 text-sm text-[var(--color-ink-soft)]">
+          <input
+            type="checkbox"
+            checked={draft.public ?? true}
+            onChange={(event) => set({ public: event.target.checked })}
+            className="accent-[var(--color-ink)]"
+          />
+          Visible to visitors
+          <span className="text-[0.75rem] text-[var(--color-ink-faint)]">
+            — untick to keep this domain and its companies to yourself
+          </span>
+        </label>
       </div>
 
       {error && (

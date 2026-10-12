@@ -31,18 +31,61 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_the_api_refuses_without_credentials() -> None:
+def test_the_api_refuses_a_write_without_credentials() -> None:
     # share.sh will not publish until this is true.
-    response = httpx.get(f"{SITE}/api/meta", timeout=10)
+    response = httpx.post(f"{SITE}/api/viewed", timeout=10)
 
     assert response.status_code == 401
     assert "Basic" in response.headers.get("www-authenticate", "")
 
 
-def test_a_person_is_sent_to_the_login_form() -> None:
+def test_the_paid_question_box_refuses_a_visitor() -> None:
+    response = httpx.post(f"{SITE}/api/chat", json={"question": "hi"}, timeout=10)
+
+    assert response.status_code == 401
+
+
+def test_a_visitor_reads_as_public() -> None:
+    meta = httpx.get(f"{SITE}/api/meta", timeout=10)
+
+    assert meta.status_code == 200
+    assert meta.json()["viewer"] == "public"
+
+
+def test_a_visitor_cannot_claim_to_be_the_owner() -> None:
+    # The header the API trusts is set by the proxy, which overwrites it.
+    response = httpx.get(
+        f"{SITE}/api/viewer", headers={"x-radar-viewer": "owner"}, timeout=10
+    )
+
+    assert response.json() == {"viewer": "public"}
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/theses", "/api/digests", "/api/disagreements", "/api/runs"]
+)
+def test_a_visitor_cannot_read_the_strategy(path: str) -> None:
+    assert httpx.get(f"{SITE}{path}", timeout=10).status_code == 403
+
+
+def test_a_first_visit_lands_on_the_introduction() -> None:
     response = httpx.get(f"{SITE}/", timeout=10, follow_redirects=False)
 
     assert response.status_code in (302, 303, 307)
+    assert "/welcome" in response.headers["location"]
+
+
+def test_get_started_lets_a_visitor_in() -> None:
+    with httpx.Client(base_url=SITE, timeout=10, follow_redirects=False) as client:
+        started = client.get("/start")
+
+        assert started.status_code == 303
+        assert client.get("/").status_code == 200
+
+
+def test_the_criteria_page_asks_a_visitor_to_sign_in() -> None:
+    response = httpx.get(f"{SITE}/criteria", timeout=10, follow_redirects=False)
+
     assert "/login" in response.headers["location"]
 
 
@@ -93,7 +136,7 @@ def test_a_wrong_password_does_not_sign_you_in() -> None:
 
         assert response.status_code == 303
         assert "error=1" in response.headers["location"]
-        assert client.get("/api/meta").status_code == 401
+        assert client.get("/api/viewer").json() == {"viewer": "public"}
 
 
 # --- invite links -----------------------------------------------------------
@@ -222,13 +265,12 @@ def test_an_old_guest_cookie_grants_nothing() -> None:
     week = int(time.time() * 1000) + 7 * 24 * 60 * 60 * 1000
     cookie = guest_cookie(week, share_password())
 
-    response = httpx.get(
-        f"{SITE}/api/candidates?limit=1",
-        cookies={"radar_session": cookie},
-        timeout=10,
-    )
+    # Not the owner: it reads as any visitor does, and cannot write.
+    viewer = httpx.get(f"{SITE}/api/viewer", cookies={"radar_session": cookie}, timeout=10)
+    write = httpx.post(f"{SITE}/api/viewed", cookies={"radar_session": cookie}, timeout=10)
 
-    assert response.status_code == 401
+    assert viewer.json() == {"viewer": "public"}
+    assert write.status_code == 401
 
 
 def test_a_name_without_a_password_does_not_sign_in() -> None:

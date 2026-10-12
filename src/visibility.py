@@ -1,0 +1,120 @@
+"""
+What a visitor may see, enforced where the data is read rather than page by page.
+
+The site is public to read. Visitors browse the judgements, the reasons and the
+analysis; only the owner changes anything or spends money. Two kinds of thing
+stay private even from reading:
+
+- whole domains marked `public: false` in their criteria, and
+- the owner's own working record on every company: their verdict where it
+  overrules the model, their note, who they contacted, and what they have read.
+
+Filtering each endpoint separately would mean every new endpoint is a fresh
+chance to forget. Instead a visitor's connection sees temporary views that
+shadow the real tables. SQLite resolves an unqualified table name to the temp
+schema first, so every existing query reads the filtered rows without changing,
+and a view cannot be written to, so nothing a visitor triggers can store
+anything either.
+
+Who is asking arrives as a header from the website's proxy, which sets it on
+every request and overwrites whatever a client sent. The API itself listens only
+on localhost, behind that proxy; a request with no header is a local script or
+test, and is the owner.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from contextvars import ContextVar
+
+from src.thesis import load_all_theses
+
+
+VIEWER_HEADER = "x-radar-viewer"
+
+# Owner: signed in. Reader: someone else's program holding an API token, which
+# reads everything. Public: anyone else.
+VIEWERS = ("owner", "reader", "public")
+
+_viewer: ContextVar[str] = ContextVar("viewer", default="owner")
+
+# The owner's own record on a company. A visitor sees the model's verdict and
+# reasoning, never these.
+PRIVATE_COLUMNS = (
+    "user_verdict",
+    "user_note",
+    "decided_at",
+    "contact_email",
+    "outreach_status",
+    "outreach_at",
+    "viewed_at",
+)
+
+
+def set_viewer(value: str | None):
+    """Record who is asking for the rest of this request. Returns a reset token."""
+    return _viewer.set(value if value in VIEWERS else "owner")
+
+
+def reset_viewer(token) -> None:
+    _viewer.reset(token)
+
+
+def viewer() -> str:
+    return _viewer.get()
+
+
+def is_public() -> bool:
+    return viewer() == "public"
+
+
+def private_domains() -> list[str]:
+    """Domains whose criteria say they are not for visitors."""
+    return [thesis.domain for thesis in load_all_theses() if not thesis.public]
+
+
+def visible(domains: list[str]) -> list[str]:
+    """The domains this viewer may see."""
+    if not is_public():
+        return domains
+
+    hidden = set(private_domains())
+
+    return [domain for domain in domains if domain not in hidden]
+
+
+def quoted(value: str) -> str:
+    """A string literal for SQL. Views cannot take bound parameters."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def apply_public_view(connection: sqlite3.Connection, hidden: list[str]) -> None:
+    """
+    Shadow the judgement tables with what a visitor may read.
+
+    `candidate` loses the hidden domains' rows and the owner's columns. The
+    tables keyed by filing follow it, so a person or a researcher found only on a
+    hidden domain's company is not listed either.
+    """
+    columns = [
+        row["name"]
+        for row in connection.execute("PRAGMA main.table_info(candidate)")
+    ]
+    select = ", ".join(
+        f"NULL AS {name}" if name in PRIVATE_COLUMNS else name for name in columns
+    )
+    where = (
+        f"WHERE theme IS NULL OR theme NOT IN ({', '.join(quoted(d) for d in hidden)})"
+        if hidden
+        else ""
+    )
+
+    connection.executescript(
+        f"""
+        CREATE TEMP VIEW candidate AS SELECT {select} FROM main.candidate {where};
+        CREATE TEMP VIEW person AS SELECT * FROM main.person
+            WHERE accession IN (SELECT accession FROM temp.candidate);
+        CREATE TEMP VIEW researcher AS SELECT * FROM main.researcher
+            WHERE accession IN (SELECT accession FROM temp.candidate);
+        """
+    )
