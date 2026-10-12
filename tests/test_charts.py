@@ -207,6 +207,18 @@ def test_an_empty_field_from_the_model_means_not_applicable() -> None:
     assert body["categories"] == ["Tenstorrent Holdings", "Fab2, Inc."]
 
 
+def test_a_limit_of_zero_means_not_applicable() -> None:
+    body = ask("Tenstorrent vs Fab2", {"kind": "compare", "companies": ["Tenstorrent", "Fab2"], "limit": 0, "measure": ""}).json()
+
+    assert body["form"] == "grouped"
+
+
+def test_a_limit_past_the_cap_is_capped() -> None:
+    body = ask("top 500", {"kind": "top", "top_measure": "raise", "limit": 500}).json()
+
+    assert len(body["categories"]) <= 20
+
+
 def test_a_compare_with_null_filters_still_works() -> None:
     body = ask("Tenstorrent vs Fab2", {"kind": "compare", "companies": ["Tenstorrent", "Fab2"], "filters": None}).json()
 
