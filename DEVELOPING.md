@@ -298,6 +298,40 @@ questions an hour, so a runaway becomes a refusal instead of a bill.
 only useful now if you want a second, disposable URL — the permanent one is served
 by systemd and needs no script.
 
+### Browsing the database
+
+`/db` on the site is [Datasette](https://datasette.io), a read-only browser for the
+SQLite file: every table, filterable, with a SQL box. It shows everything, Parallax
+and the owner's notes included, so the proxy lets only a signed-in owner through;
+visitors are sent to sign in and API tokens are refused.
+
+It runs as a third user service, listening on localhost only, from its own
+virtualenv so its dependencies never touch the radar's:
+
+```bash
+python3 -m venv ~/datasette-venv && ~/datasette-venv/bin/pip install datasette
+```
+
+```ini
+# ~/.config/systemd/user/radar-db.service
+[Unit]
+Description=Deal Radar database browser (Datasette, read-only)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/deal-radar
+ExecStart=%h/datasette-venv/bin/datasette serve data/radar.sqlite --host 127.0.0.1 --port 8200 --setting base_url /db/ --setting sql_time_limit_ms 3000 --setting max_returned_rows 2000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+Datasette opens the file read-only, and the time limit stops a careless query from
+holding the database while the daily run wants it.
+
 ### Surviving a reboot
 
 The API and the website run as **user** systemd services, not from tmux:

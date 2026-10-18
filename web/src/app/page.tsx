@@ -329,6 +329,15 @@ function CandidateList() {
             >
               Analysis
             </Link>
+            {/* A plain link, not <Link>: /db is Datasette, outside this app. */}
+            {owner && (
+              <a
+                href="/db/radar"
+                className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+              >
+                Database
+              </a>
+            )}
           </span>
 
           <p className="label">

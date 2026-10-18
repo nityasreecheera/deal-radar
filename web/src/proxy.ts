@@ -176,6 +176,27 @@ export async function proxy(request: NextRequest) {
     });
   }
 
+  // The database browser shows every table, private domains and the owner's
+  // notes included, so only a signed-in owner gets through. A token is refused
+  // even though it can read the API: the API filters, and this does not.
+  if (pathname === "/db" || pathname.startsWith("/db/")) {
+    if ((role === "owner" && !bearer) || hasValidBasicAuth(request)) {
+      return onward(request, "owner");
+    }
+
+    if (bearer) {
+      return new NextResponse("The database browser is for the owner only.", {
+        status: 403,
+      });
+    }
+
+    const login = new URL("/login", request.url);
+
+    login.searchParams.set("next", pathname);
+
+    return NextResponse.redirect(login);
+  }
+
   if (role === "reader") {
     // Read everything, change nothing. /api/chat is excluded with the writes:
     // it costs money on every call, and a token lives in somebody else's loop.
