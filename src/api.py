@@ -57,6 +57,7 @@ from src.charts import (
     plan_question,
 )
 from src.chat import ChatAnswer, ChatError, answer_question
+from src.momentum import Highlight, alerts_for, highlights
 from src.funding import (
     FundingRound,
     describe_minimum,
@@ -625,12 +626,47 @@ def get_candidates(
             states=located(state, country),
         )
 
+        attach_alerts(connection, found)
+
         return CandidateList(
             count=len(found),
             unread=count_unread(connection, theme=theme),
             candidates=found,
             reading=parsed.reading,
             unsupported=parsed.unsupported,
+        )
+
+
+def attach_alerts(connection, candidates: list[StoredCandidate]) -> None:
+    """Put each company's latest strong signal, if any, beside its verdict."""
+    alerts = alerts_for(connection, [c.cik for c in candidates if c.cik])
+
+    for candidate in candidates:
+        if candidate.cik:
+            candidate.alert = alerts.get(candidate.cik.lstrip("0"))
+
+
+class HighlightList(BaseModel):
+    days: int
+    highlights: list[Highlight]
+
+
+@app.get("/api/highlights", response_model=HighlightList)
+def get_highlights(
+    days: int = Query(default=7, ge=1, le=90),
+    limit: int = Query(default=10, ge=1, le=50),
+    theme: str | None = None,
+) -> HighlightList:
+    """
+    The week's strongest signals from companies already judged, rolling.
+
+    Read through the same views as everything else, so a visitor never sees a
+    signal about a company only a private domain judged.
+    """
+    with closing(connect()) as connection:
+        return HighlightList(
+            days=days,
+            highlights=highlights(connection, days=days, limit=limit, theme=theme),
         )
 
 
@@ -765,6 +801,7 @@ def get_detail(accession: str, theme: str | None = None) -> CompanyDetail:
 
         # Attached before scoring: the signal reads them off the candidate.
         found.researchers = load_researchers(connection, accession)
+        attach_alerts(connection, [found])
 
         return CompanyDetail(
             researchers=found.researchers,

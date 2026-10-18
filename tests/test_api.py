@@ -1,3 +1,4 @@
+from datetime import date
 import json
 from pathlib import Path
 
@@ -859,3 +860,31 @@ def test_recipients_are_never_shown_and_survive_a_browser_edit(config) -> None:
     on_disk = load_all_theses()[0]
     assert on_disk.include == ["arms, actuators and grippers"]
     assert on_disk.email_to == ["partner@fund.com"]
+
+
+def test_highlights_and_alerts_over_http() -> None:
+    from src.archive import save_filing
+    from src.momentum import detect
+
+    first = candidate(name="Grow Co", accession="acc-g1", amount=2_000_000, filed_date="2026-06-01")
+    seed(first)
+
+    later = first.filing.model_copy(update={
+        "accession": "acc-g2",
+        "filed_date": date.today().isoformat(),
+        "total_offering_amount": 20_000_000,
+    })
+
+    with connect() as connection:
+        save_filing(connection, first.filing)
+        save_filing(connection, later)
+        detect(connection, "2026-06-01")
+
+    body = client.get("/api/highlights").json()
+
+    assert [h["company_name"] for h in body["highlights"]] == ["Grow Co"]
+    assert body["highlights"][0]["strong"] is True
+
+    listed = client.get("/api/candidates").json()["candidates"]
+
+    assert "10x" in listed[0]["alert"]

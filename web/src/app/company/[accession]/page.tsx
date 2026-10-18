@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
+import { SignalMark } from "@/components/SignalMark";
 
 import { CompanyProfile } from "@/components/CompanyProfile";
 import { ContactPanel } from "@/components/ContactPanel";
@@ -155,6 +156,7 @@ export default function CompanyPage({
             >
               {VERDICT_LABEL[verdict]}
             </span>
+            <SignalMark alert={candidate.alert} />
             {isOverridden(candidate) && (
               <span className="text-[var(--color-ink-soft)]">(your call)</span>
             )}
@@ -173,6 +175,13 @@ export default function CompanyPage({
               </>
             )}
           </p>
+
+          {candidate.alert && (
+            <p className="mt-3 text-[0.8125rem] text-[var(--color-signal)]">
+              <span aria-hidden>▲ </span>
+              Since this verdict: {candidate.alert}. Worth a second look.
+            </p>
+          )}
         </div>
       </header>
 

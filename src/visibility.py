@@ -152,5 +152,9 @@ def apply_public_view(
             WHERE accession IN (SELECT accession FROM temp.candidate);
         CREATE TEMP VIEW researcher AS SELECT * FROM main.researcher
             WHERE accession IN (SELECT accession FROM temp.candidate);
+        CREATE TEMP VIEW momentum_signal AS SELECT * FROM main.momentum_signal
+            WHERE ltrim(cik, '0') IN (
+                SELECT ltrim(cik, '0') FROM temp.candidate WHERE cik IS NOT NULL
+            );
         """
     )

@@ -378,8 +378,12 @@ def parse_form_d(
         else None
     )
 
+    # The flag sits inside newOrAmendment on every real filing. The shorter path
+    # is what this read for months, which matched nothing, so every amendment
+    # was taken for a new raise and the amendment filter never fired.
     amendment = (
-        find_text(offering, ["typeOfFiling", "isAmendment"])
+        find_text(offering, ["typeOfFiling", "newOrAmendment", "isAmendment"])
+        or find_text(offering, ["typeOfFiling", "isAmendment"])
         if offering is not None
         else None
     )

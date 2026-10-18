@@ -183,6 +183,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/highlights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Highlights
+         * @description The week's strongest signals from companies already judged, rolling.
+         *
+         *     Read through the same views as everything else, so a visitor never sees a
+         *     signal about a company only a private domain judged.
+         */
+        get: operations["get_highlights_api_highlights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/candidates/{accession}/profile": {
         parameters: {
             query?: never;
@@ -1016,6 +1039,39 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * Highlight
+         * @description A signal as a reader sees it: the company, how it was judged, what changed.
+         */
+        Highlight: {
+            /** Accession */
+            accession: string;
+            /** Candidate Accession */
+            candidate_accession: string;
+            /** Company Name */
+            company_name: string;
+            /** Filed Date */
+            filed_date: string;
+            /** Kind */
+            kind: string;
+            /** Strong */
+            strong: boolean;
+            /** Headline */
+            headline: string;
+            /** Offering Amount */
+            offering_amount?: number | null;
+            /** Themes */
+            themes: string[];
+            /** Verdict */
+            verdict: string;
+        };
+        /** HighlightList */
+        HighlightList: {
+            /** Days */
+            days: number;
+            /** Highlights */
+            highlights: components["schemas"]["Highlight"][];
+        };
         /** ManualRun */
         ManualRun: {
             /** Id */
@@ -1418,6 +1474,8 @@ export interface components {
             entity_type?: string | null;
             /** Cik */
             cik?: string | null;
+            /** Alert */
+            alert?: string | null;
             /**
              * Effective Verdict
              * @description What this company counts as. The human's call wins.
@@ -1463,6 +1521,8 @@ export interface components {
              * @default true
              */
             public: boolean;
+            /** Email To */
+            email_to?: string[];
         };
         /**
          * ThesisEdit
@@ -1918,6 +1978,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CandidateList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_highlights_api_highlights_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                limit?: number;
+                theme?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HighlightList"];
                 };
             };
             /** @description Validation Error */

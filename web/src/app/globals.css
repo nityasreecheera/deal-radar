@@ -18,6 +18,7 @@
   --color-maybe: #8a6a2f;
   --color-maybe-tint: #f8f3e9;
   --color-nofit: #9a9490;
+  --color-signal: #b45309;
 
   --font-display: var(--font-newsreader), Georgia, serif;
   --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;

@@ -510,6 +510,42 @@ original healthcare thesis also keeps its filename — it lives in `thesis.yaml`
 every written-down command points there, and matching on the domain inside each
 file rather than the filename is what stops an edit renaming it.
 
+### Signals: when a company already judged files again
+
+A verdict is a snapshot. `src/momentum.py` reads every later filing in the archive
+from a company some domain has judged, compares it with what that company filed
+before, and records what changed: a new round, a round at least twice the last
+one, an amendment showing the round filled or the amount sold jumping, many more
+investors, or a new director or officer. Free: Form D only, no search, no model.
+
+It runs straight after the archive in the daily job, and each filing is looked at
+once. Who hears about a signal depends on the verdict:
+
+| Verdict | Signals that count |
+|---|---|
+| fits, maybe, unknown, or not decided | any |
+| no fit (the model's or the owner's) | strong only |
+
+Strong means a round at least twice the last, a round filling, or the amount sold
+at least doubling (each with at least $500K at stake). Three places show them:
+
+- **The ▲ beside a verdict**, in the list and on the company page, for a strong
+  signal in the last 30 days.
+- **The Highlights page** (`/highlights`, `GET /api/highlights`): the top ten of the
+  last seven days, strongest first, rolling.
+- **A Signals section in each domain's email**, five at most, each signal sent once
+  per domain (`momentum_sent`), marked only after the email actually goes.
+
+Signals are read through `candidate`, so for a visitor the private domains'
+companies never appear, and `momentum_signal` itself is shadowed by a view.
+
+**The amendment bug this found.** Form D puts the amendment flag at
+`typeOfFiling/newOrAmendment/isAmendment`. The parser read
+`typeOfFiling/isAmendment`, which matched nothing on any real filing, so for months
+every amendment passed as a new raise and the "exclude amendments" filter never
+fired. `scripts/backfill_amendments.py` corrects the archive from EDGAR's own D/A
+search; the funding history was always right, because it reads the form type.
+
 ### Sending a domain to someone else
 
 A domain can name its own recipients in its YAML file:

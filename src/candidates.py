@@ -104,6 +104,10 @@ class StoredCandidate(BaseModel):
     entity_type: str | None = None
     cik: str | None = None
 
+    # A strong signal from a later filing, in words, when there is a recent one.
+    # Attached at read time by the API; never stored on this row.
+    alert: str | None = None
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def effective_verdict(self) -> FitVerdict:

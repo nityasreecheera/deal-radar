@@ -318,6 +318,12 @@ function CandidateList() {
               </Link>
             )}
             <Link
+              href="/highlights"
+              className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
+            >
+              Highlights
+            </Link>
+            <Link
               href="/analysis"
               className="text-[0.8125rem] text-[var(--color-ink-faint)] transition-colors hover:text-[var(--color-ink)]"
             >

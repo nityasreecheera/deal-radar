@@ -583,3 +583,28 @@ def test_default_groups_are_spelled_the_way_the_sec_spells_them() -> None:
     from src.models import SEC_HEALTHCARE_GROUPS
 
     assert all("&" not in group for group in SEC_HEALTHCARE_GROUPS)
+
+
+def test_an_amendment_is_recognised_in_the_shape_edgar_serves() -> None:
+    # The flag lives inside newOrAmendment. Reading typeOfFiling/isAmendment
+    # matched nothing on any real filing, so for months every amendment passed
+    # as a new raise and the "exclude amendments" filter never fired.
+    xml = """<?xml version="1.0"?>
+<edgarSubmission>
+  <primaryIssuer>
+    <cik>0001234567</cik>
+    <entityName>Acme Health, Inc.</entityName>
+  </primaryIssuer>
+  <offeringData>
+    <industryGroup><industryGroupType>Other Health Care</industryGroupType></industryGroup>
+    <typeOfFiling>
+      <newOrAmendment>
+        <isAmendment>true</isAmendment>
+        <previousAccessionNumber>0001234567-26-000001</previousAccessionNumber>
+      </newOrAmendment>
+      <dateOfFirstSale><value>2026-10-09</value></dateOfFirstSale>
+    </typeOfFiling>
+  </offeringData>
+</edgarSubmission>"""
+
+    assert parse_form_d(xml, "acc-3", "2026-10-15").is_amendment is True
