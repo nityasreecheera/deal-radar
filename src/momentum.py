@@ -236,8 +236,12 @@ def detect(connection: sqlite3.Connection, since: str) -> list[Signal]:
         FROM archived_filing a
         WHERE a.filed_date >= ?
           AND a.is_fund = 0
-          AND ltrim(a.cik, '0') IN (
-              SELECT ltrim(cik, '0') FROM main.candidate WHERE cik IS NOT NULL
+          -- Only filings after a judgement of that company. One filed before
+          -- the filing that was judged is history the verdict already had.
+          AND EXISTS (
+              SELECT 1 FROM main.candidate c
+              WHERE ltrim(c.cik, '0') = ltrim(a.cik, '0')
+                AND c.filed_date < a.filed_date
           )
           AND a.accession NOT IN (SELECT accession FROM main.candidate)
           AND a.accession NOT IN (SELECT accession FROM momentum_signal)
@@ -312,6 +316,7 @@ def _rows(
                coalesce(c.user_verdict, c.verdict) AS effective
         FROM momentum_signal s
         JOIN candidate c ON ltrim(c.cik, '0') = ltrim(s.cik, '0')
+            AND c.filed_date < s.filed_date
         WHERE s.filed_date >= ?
     """
     params: list = [since]
@@ -402,7 +407,10 @@ def alerts_for(
         FROM momentum_signal s
         WHERE s.strong = 1 AND s.filed_date >= ?
           AND ltrim(s.cik, '0') IN ({placeholders})
-          AND ltrim(s.cik, '0') IN (SELECT ltrim(cik, '0') FROM candidate WHERE cik IS NOT NULL)
+          AND EXISTS (
+              SELECT 1 FROM candidate c
+              WHERE ltrim(c.cik, '0') = ltrim(s.cik, '0') AND c.filed_date < s.filed_date
+          )
         ORDER BY s.filed_date DESC
         """,
         [_since(days, today), *keys],

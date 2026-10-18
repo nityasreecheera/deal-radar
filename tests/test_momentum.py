@@ -255,3 +255,13 @@ def test_a_signal_is_emailed_once_per_domain(db) -> None:
 
 def test_no_signals_means_no_section() -> None:
     assert render_section([]) == ""
+
+
+def test_a_filing_from_before_the_verdict_is_not_news(db) -> None:
+    # The company was judged on its October filing. A June filing found later in
+    # the archive is history the verdict already had, not something since.
+    save_filing(db, filing("a0", "2026-06-01", offering=500_000))
+    judge(db, filing("a1", "2026-10-01", offering=2_000_000), "fits")
+    save_filing(db, filing("a-before", "2026-09-01", offering=9_000_000))
+
+    assert detect(db, "2026-06-01") == []
