@@ -186,3 +186,17 @@ def test_deliver_falls_back_to_slack_when_email_fails(monkeypatch) -> None:
 
     assert ok is True
     assert message == "sent to slack"
+
+
+def test_a_domain_can_send_to_its_own_recipients() -> None:
+    sent, sender = capture()
+
+    ok, message = send_email(
+        "digest", "subject", settings(), send=sender,
+        recipients=["partner@fund.com", "analyst@fund.com"],
+    )
+
+    assert ok is True
+    # Replaces the owner's address for this message rather than adding to it.
+    assert sent[0]["To"] == "partner@fund.com, analyst@fund.com"
+    assert "me@example.com" not in sent[0]["To"]

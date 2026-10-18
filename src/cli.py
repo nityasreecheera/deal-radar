@@ -14,7 +14,7 @@ from src.candidates import (
     find_by_company,
     list_candidates,
 )
-from src.delivery import deliver
+from src.delivery import deliver, send_email
 from src.candidates import (
     category_lines,
     describe_rejection_clusters,
@@ -24,7 +24,7 @@ from src.digest import render_digest, save_digest
 from src.edgar import fetch_filings
 from src.pipeline import default_window, run_radar
 from src.seen import connect, count_seen
-from src.thesis import ThesisError, load_all_theses, load_thesis
+from src.thesis import Thesis, ThesisError, load_all_theses, load_thesis
 
 
 def command_run(args: argparse.Namespace) -> int:
@@ -127,11 +127,7 @@ def command_run(args: argparse.Namespace) -> int:
 
     if args.send:
         first_line = digest.splitlines()[0] if digest else "Deal Radar"
-        sent, message = deliver(
-            digest,
-            subject=first_line,
-            prefer_slack=args.slack,
-        )
+        sent, message = deliver_for(thesis, digest, first_line, args.slack)
         print(message, file=sys.stderr)
 
         if not sent:
@@ -157,6 +153,9 @@ def run_every_domain(args: argparse.Namespace) -> int:
         return 1
 
     sections: list[tuple[int, str]] = []
+    # Domains with their own recipients get their own email and stay out of the
+    # combined one, so what goes to someone else never lands in the owner's inbox.
+    routed: list[tuple[Thesis, str]] = []
     failed = 0
 
     for thesis in theses:
@@ -182,14 +181,31 @@ def run_every_domain(args: argparse.Namespace) -> int:
 
         digest = getattr(one, "_digest", "")
 
-        if digest:
+        if digest and thesis.email_to:
+            routed.append((thesis, digest))
+        elif digest:
             # Ordered by what was found, so a morning with something in it does
             # not open with four quiet domains.
             found = digest.count("\n1. ")
             sections.append((found, digest))
 
+    undelivered = 0
+
+    for thesis, digest in routed:
+        print(f"— {thesis.domain}: its own email, not in the combined one —", file=sys.stderr)
+        print(digest, file=sys.stderr)
+
+    if args.send:
+        for thesis, digest in routed:
+            subject = digest.splitlines()[0] if digest else f"Deal Radar · {thesis.domain}"
+            sent, message = deliver_for(thesis, digest, subject, args.slack)
+            print(f"{thesis.domain}: {message}", file=sys.stderr)
+
+            if not sent:
+                undelivered += 1
+
     if not sections:
-        return 1
+        return 1 if undelivered or not routed else 0
 
     sections.sort(key=lambda item: -item[0])
     combined = "\n\n".join(text.rstrip() for _, text in sections) + "\n"
@@ -206,7 +222,23 @@ def run_every_domain(args: argparse.Namespace) -> int:
         if not sent:
             return 1
 
+    if undelivered:
+        return 1
+
     return 1 if failed and not sections else 0
+
+
+def deliver_for(thesis: Thesis, digest: str, subject: str, prefer_slack: bool) -> tuple[bool, str]:
+    """
+    Send one domain's digest to wherever that domain says it goes.
+
+    A domain with its own recipients goes by email only. Falling back to the
+    owner's Slack would put it in front of someone it was routed away from.
+    """
+    if thesis.email_to:
+        return send_email(digest, subject, recipients=thesis.email_to)
+
+    return deliver(digest, subject=subject, prefer_slack=prefer_slack)
 
 
 def command_status(args: argparse.Namespace) -> int:

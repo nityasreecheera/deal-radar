@@ -835,3 +835,27 @@ def test_meta_names_every_place_with_its_country() -> None:
     assert places["A1"]["subdivision"] == "British Columbia"
     assert places["X0"]["name"] == "United Kingdom"
     assert places["TX"]["subdivision"] == "Texas"
+
+
+def test_recipients_are_never_shown_and_survive_a_browser_edit(config) -> None:
+    # Set in the file by hand, the way the owner does it.
+    from src.thesis import Thesis, load_all_theses, save_thesis
+
+    save_thesis(Thesis(**criteria(), email_to=["partner@fund.com"]), directory=config)
+
+    listed = client.get("/api/theses").json()
+    assert listed[0]["email_to"] == []
+
+    # The page sends back what it was shown, which has no recipients in it.
+    edited = criteria()
+    edited["include"] = ["arms, actuators and grippers"]
+    response = client.put(
+        "/api/theses", json={"thesis": edited, "original_domain": "Robotics"}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email_to"] == []
+
+    on_disk = load_all_theses()[0]
+    assert on_disk.include == ["arms, actuators and grippers"]
+    assert on_disk.email_to == ["partner@fund.com"]

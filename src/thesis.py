@@ -12,12 +12,16 @@ import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.models import SEC_HEALTHCARE_GROUPS, FormDFiling
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Deliberately loose: one @, something either side, a dot in the domain. Strict
+# validation belongs to the mail server, which rejects what it cannot deliver.
+EMAIL_ADDRESS = re.compile(r"^[^@\s,]+@[^@\s,]+\.[^@\s,]+$")
 DEFAULT_THESIS_PATH = PROJECT_ROOT / "config" / "thesis.yaml"
 
 
@@ -60,6 +64,23 @@ class Thesis(BaseModel):
     # Whether visitors to the public site may see this domain and its
     # judgements. The owner always can.
     public: bool = True
+
+    # Where this domain's digest goes, when it should not go to the owner's
+    # combined email. A domain with recipients is sent on its own and left out
+    # of the combined message. Set in the YAML file only: the website never
+    # shows these addresses and an edit from the browser keeps whatever is here.
+    email_to: list[str] = Field(default_factory=list)
+
+    @field_validator("email_to")
+    @classmethod
+    def _valid_addresses(cls, value: list[str]) -> list[str]:
+        cleaned = [address.strip() for address in value if address.strip()]
+
+        for address in cleaned:
+            if not EMAIL_ADDRESS.match(address):
+                raise ValueError(f"{address!r} is not an email address")
+
+        return cleaned
 
 
 class ThesisError(RuntimeError):
