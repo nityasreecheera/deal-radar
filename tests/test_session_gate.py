@@ -419,3 +419,19 @@ def test_an_unsigned_token_grants_nothing() -> None:
     )
 
     assert response.status_code == 401
+
+
+def test_the_database_browser_sends_a_visitor_to_sign_in() -> None:
+    # /db shows every table, private domains and the owner's notes included.
+    response = httpx.get(f"{SITE}/db/radar", follow_redirects=False, timeout=10)
+
+    assert response.status_code in (302, 303, 307, 308)
+    assert "/login" in response.headers["location"]
+
+
+@needs_password
+def test_a_read_token_cannot_open_the_database_browser() -> None:
+    # The API filters what a token sees; the table browser does not.
+    response = httpx.get(f"{SITE}/db/radar", headers=bearer("read"), timeout=10)
+
+    assert response.status_code == 403
