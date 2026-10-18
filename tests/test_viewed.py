@@ -205,3 +205,29 @@ def test_filters_combine(db) -> None:
     # 'a' fits and is in theme but has been read; 'b' is the wrong verdict;
     # 'c' is the wrong theme.
     assert found == []
+
+
+def test_the_badge_counts_companies_not_judgements(db) -> None:
+    # One company judged by three domains is one thing to read.
+    for theme in ("Healthcare", "AI tools", "Energy"):
+        save_candidate(db, candidate(), theme=theme)
+
+    assert count_unread(db) == 1
+
+
+def test_the_badge_counts_only_what_is_meant_to_be_read(db) -> None:
+    save_candidate(db, candidate(accession="a", verdict="fits"), theme="Healthcare")
+    save_candidate(db, candidate(accession="b", name="Maybe Co", verdict="maybe"), theme="Healthcare")
+    save_candidate(db, candidate(accession="c", name="No Co", verdict="no_fit"), theme="Healthcare")
+    save_candidate(db, candidate(accession="d", name="Unknown Co", verdict="unknown"), theme="Healthcare")
+
+    assert count_unread(db) == 2
+
+
+def test_opening_a_company_clears_it_in_every_domain(db) -> None:
+    for theme in ("Healthcare", "AI tools"):
+        save_candidate(db, candidate(), theme=theme)
+
+    mark_viewed(db, "acc-1")
+
+    assert count_unread(db) == 0

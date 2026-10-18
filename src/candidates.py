@@ -632,19 +632,26 @@ def count_unread(
     connection: sqlite3.Connection,
     theme: str | None = None,
 ) -> int:
-    """How many judgements nobody has read — the inbox badge."""
-    if theme:
-        row = connection.execute(
-            "SELECT COUNT(*) AS n FROM candidate "
-            "WHERE viewed_at IS NULL AND theme = ?",
-            (theme,),
-        ).fetchone()
-    else:
-        row = connection.execute(
-            "SELECT COUNT(*) AS n FROM candidate WHERE viewed_at IS NULL"
-        ).fetchone()
+    """
+    How many companies worth reading nobody has opened — the inbox badge.
 
-    return int(row["n"])
+    Companies, not judgements: one company judged by six domains is one thing
+    to read, and counting rows showed 5,027 unread for 1,783 companies. And only
+    fits and maybes, the verdicts meant for reading. Counting no fits and
+    unknowns made the badge a number nobody could ever bring down.
+    """
+    query = (
+        "SELECT COUNT(DISTINCT canonical_name) AS n FROM candidate "
+        "WHERE viewed_at IS NULL "
+        "AND COALESCE(user_verdict, verdict) IN ('fits', 'maybe')"
+    )
+    params: tuple = ()
+
+    if theme:
+        query += " AND theme = ?"
+        params = (theme,)
+
+    return int(connection.execute(query, params).fetchone()["n"])
 
 
 def known_themes(connection: sqlite3.Connection) -> list[str]:
