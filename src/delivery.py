@@ -112,12 +112,21 @@ def send_email(
     subject: str,
     settings: EmailSettings | None = None,
     send: MessageSender | None = None,
+    recipients: list[str] | None = None,
 ) -> tuple[bool, str]:
-    """Deliver the digest by email. Returns whether it sent, and why not."""
+    """
+    Deliver the digest by email. Returns whether it sent, and why not.
+
+    `recipients` replaces the configured address for this one message, which is
+    how a domain with its own `email_to` reaches someone other than the owner.
+    """
     resolved = settings or load_email_settings()
 
     if resolved is None:
         return False, "email is not configured (SMTP_USER / SMTP_PASSWORD unset)"
+
+    if recipients:
+        resolved = resolved.model_copy(update={"recipient": ", ".join(recipients)})
 
     message = build_message(content, subject, resolved)
     sender = send or create_smtp_sender(resolved)

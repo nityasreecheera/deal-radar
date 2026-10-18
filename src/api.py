@@ -937,7 +937,9 @@ def list_theses() -> list[Thesis]:
     verdict was judged against and how to write criteria of their own. A domain
     marked `public: false` is left out entirely.
     """
-    theses = load_all_theses()
+    # Recipients are an address book, not criteria: nobody browsing needs
+    # them, and the owner sets them in the file rather than on the page.
+    theses = [thesis.model_copy(update={"email_to": []}) for thesis in load_all_theses()]
 
     if is_public():
         return [thesis for thesis in theses if thesis.public]
@@ -955,15 +957,28 @@ def write_thesis(edit: ThesisEdit) -> Thesis:
     website can change what reaches an inbox, and cannot break the daily run
     by writing something the radar will fail to read tomorrow morning.
     """
+    thesis = edit.thesis
+
+    # The page never sees `email_to`, so an edit arrives without it. Keep what
+    # the file already says rather than quietly stopping that domain's email.
+    if edit.original_domain and not thesis.email_to:
+        existing = next(
+            (t for t in load_all_theses() if t.domain == edit.original_domain),
+            None,
+        )
+
+        if existing is not None and existing.email_to:
+            thesis = thesis.model_copy(update={"email_to": existing.email_to})
+
     try:
-        save_thesis(edit.thesis, original_domain=edit.original_domain)
+        save_thesis(thesis, original_domain=edit.original_domain)
     except ThesisError as exc:
         raise HTTPException(
             status_code=422,
             detail={"ok": False, "errors": [str(exc)]},
         ) from exc
 
-    return edit.thesis
+    return thesis.model_copy(update={"email_to": []})
 
 
 @app.delete("/api/theses/{domain}", responses={404: {"model": ErrorBody}}, dependencies=[OwnerOnly])

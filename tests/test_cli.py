@@ -181,3 +181,64 @@ def test_the_combined_message_contains_every_domain(radar, monkeypatch, capsys) 
     # missed the bug it was written for.
     for domain in ("Healthcare companies", "Energy companies", "Fintech companies"):
         assert printed.count(domain) == 1, f"{domain} appears {printed.count(domain)}x"
+
+
+def test_a_domain_with_its_own_recipients_is_sent_separately(radar, monkeypatch) -> None:
+    """
+    Parallax goes to a different inbox. It must reach that inbox alone and
+    never appear in the owner's combined message.
+    """
+    save_thesis(a_thesis("Healthcare"), directory=radar)
+    routed = a_thesis("Parallax").model_copy(update={"email_to": ["partner@fund.com"]})
+    save_thesis(routed, directory=radar)
+
+    with_judge(
+        monkeypatch,
+        lambda f, e, t: Candidate(filing=f, verdict="fits", reason="Because."),
+    )
+
+    combined: list[str] = []
+    separate: list[tuple[str, list[str]]] = []
+
+    monkeypatch.setattr(
+        cli, "deliver",
+        lambda content, subject, prefer_slack=False: (combined.append(content), (True, "sent"))[1],
+    )
+    monkeypatch.setattr(
+        cli, "send_email",
+        lambda content, subject, recipients=None: (separate.append((content, recipients)), (True, "sent"))[1],
+    )
+
+    assert cli.command_run(arguments(all_domains=True, send=True)) == 0
+
+    assert len(combined) == 1
+    assert "Healthcare companies" in combined[0]
+    assert "Parallax companies" not in combined[0]
+
+    assert len(separate) == 1
+    assert "Parallax companies" in separate[0][0]
+    assert separate[0][1] == ["partner@fund.com"]
+
+
+def test_a_failed_separate_email_fails_the_run(radar, monkeypatch) -> None:
+    # Cron reads the exit code; a domain whose email never went must not look fine.
+    save_thesis(a_thesis("Healthcare"), directory=radar)
+    save_thesis(
+        a_thesis("Parallax").model_copy(update={"email_to": ["partner@fund.com"]}),
+        directory=radar,
+    )
+    with_judge(
+        monkeypatch,
+        lambda f, e, t: Candidate(filing=f, verdict="fits", reason="Because."),
+    )
+    monkeypatch.setattr(cli, "deliver", lambda *a, **k: (True, "sent"))
+    monkeypatch.setattr(cli, "send_email", lambda *a, **k: (False, "email failed"))
+
+    assert cli.command_run(arguments(all_domains=True, send=True)) == 1
+
+
+def test_an_address_that_is_not_an_email_is_refused() -> None:
+    with pytest.raises(ValueError):
+        a_thesis("Parallax").model_validate(
+            {**a_thesis("Parallax").model_dump(), "email_to": ["not an address"]}
+        )

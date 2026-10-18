@@ -510,6 +510,21 @@ original healthcare thesis also keeps its filename — it lives in `thesis.yaml`
 every written-down command points there, and matching on the domain inside each
 file rather than the filename is what stops an edit renaming it.
 
+### Sending a domain to someone else
+
+A domain can name its own recipients in its YAML file:
+
+```yaml
+email_to:
+  - partner@fund.com
+```
+
+That domain's digest then goes to those addresses as its own email, and is left
+out of the owner's combined message. It goes by email only, never the Slack
+fallback, so it cannot land somewhere it was routed away from. The addresses are
+never sent to the website, and an edit made in the browser keeps them, because the
+page never had them to send back. Changing them means editing the file.
+
 ### More than one domain
 
 One thesis file per domain in `config/`. Two things make that work, and both were
