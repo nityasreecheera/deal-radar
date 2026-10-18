@@ -177,6 +177,32 @@ CREATE TABLE IF NOT EXISTS archived_filing (
     archived_at     TEXT NOT NULL
 );
 
+-- A later filing from a company already judged that said something new: a
+-- bigger round, a round that filled, a new director. One row per filing, found
+-- by src/momentum.py from the archive. Domains are joined at read time through
+-- candidate, which is what keeps a private domain's companies from visitors.
+CREATE TABLE IF NOT EXISTS momentum_signal (
+    accession       TEXT PRIMARY KEY,
+    cik             TEXT NOT NULL,
+    company_name    TEXT NOT NULL,
+    filed_date      TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    strong          INTEGER NOT NULL DEFAULT 0,
+    headline        TEXT NOT NULL,
+    offering_amount INTEGER,
+    amount_sold     INTEGER,
+    detected_at     TEXT NOT NULL
+);
+
+-- Which signals each domain's email has already carried, so a signal is sent
+-- once rather than every morning it stays inside the window.
+CREATE TABLE IF NOT EXISTS momentum_sent (
+    accession TEXT NOT NULL,
+    theme     TEXT NOT NULL,
+    sent_at   TEXT NOT NULL,
+    PRIMARY KEY (accession, theme)
+);
+
 -- Which days the archive has actually read, and whether it read all of them.
 --
 -- An empty day and an unread day hold the same number of rows. Without this a
@@ -228,6 +254,9 @@ CREATE INDEX IF NOT EXISTS idx_candidate_viewed ON candidate (viewed_at);
 
 CREATE INDEX IF NOT EXISTS idx_person_name ON person (name_key);
 CREATE INDEX IF NOT EXISTS idx_funding_cik ON funding_round (cik, filed_date);
+
+CREATE INDEX IF NOT EXISTS idx_momentum_cik ON momentum_signal (cik, filed_date);
+CREATE INDEX IF NOT EXISTS idx_archive_cik ON archived_filing (cik, filed_date);
 
 CREATE INDEX IF NOT EXISTS idx_archive_group
     ON archived_filing (industry_group, filed_date);

@@ -16,6 +16,8 @@ export type Market = Schemas["Market"];
 export type DealSizes = Schemas["DealSizesRow"];
 export type RunPreview = Schemas["RunPreview"];
 export type ManualRun = Schemas["ManualRun"];
+export type Highlight = Schemas["Highlight"];
+export type HighlightList = Schemas["HighlightList"];
 export type Verdict = Candidate["verdict"];
 
 export const VERDICTS: Verdict[] = ["fits", "maybe", "unknown", "no_fit"];
@@ -68,6 +70,9 @@ async function get<T>(path: string): Promise<Result<T>> {
 }
 
 export const getMeta = () => get<Meta>("/api/meta");
+
+export const getHighlights = (days = 7, limit = 10) =>
+  get<HighlightList>(`/api/highlights?days=${days}&limit=${limit}`);
 
 export type CandidateFilters = {
   verdict?: string[];

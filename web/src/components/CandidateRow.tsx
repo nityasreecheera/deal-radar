@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SignalMark } from "@/components/SignalMark";
 
 import {
   VERDICT_LABEL,
@@ -120,6 +121,8 @@ export function CandidateRow({
             )}
           </span>
         </span>
+
+        <SignalMark alert={candidate.alert} />
 
         {domains ? (
           <span className="shrink-0 text-[0.75rem] text-[var(--color-ink-faint)]">

@@ -21,6 +21,7 @@ from src.candidates import (
     quarter_start,
 )
 from src.digest import render_digest, save_digest
+from src.momentum import detect, mark_sent, render_section, unsent
 from src.edgar import fetch_filings
 from src.pipeline import default_window, run_radar
 from src.seen import connect, count_seen
@@ -94,7 +95,18 @@ def command_run(args: argparse.Namespace) -> int:
             connection, since=quarter_start(end), theme=thesis.domain
         )
 
+        # Companies this domain already judged that filed again since. Sent once:
+        # marked only after an email actually carrying them goes out.
+        pending = unsent(connection, thesis.domain)
+
     digest = render_digest(run, thesis.name, contexts, clusters)
+
+    section = render_section(pending)
+
+    if section:
+        digest = digest.rstrip() + "\n\n" + section + "\n"
+
+    args._signals = (thesis.domain, [signal.accession for signal in pending])
 
     # Silent when another run is collecting this one — otherwise stdout carries
     # every domain twice, once alone and once inside the combined message.
@@ -133,7 +145,20 @@ def command_run(args: argparse.Namespace) -> int:
         if not sent:
             return 1
 
+        record_signals_sent(args, [args._signals])
+
     return 0
+
+
+def record_signals_sent(args: argparse.Namespace, batches: list[tuple[str, list[str]]]) -> None:
+    """Remember which signals went out, so tomorrow's email does not repeat them."""
+    if getattr(args, "dry_run", False):
+        return
+
+    with closing(connect(Path(args.db) if args.db else None)) as connection:
+        for theme, accessions in batches:
+            if accessions:
+                mark_sent(connection, theme, accessions)
 
 
 def run_every_domain(args: argparse.Namespace) -> int:
@@ -155,7 +180,8 @@ def run_every_domain(args: argparse.Namespace) -> int:
     sections: list[tuple[int, str]] = []
     # Domains with their own recipients get their own email and stay out of the
     # combined one, so what goes to someone else never lands in the owner's inbox.
-    routed: list[tuple[Thesis, str]] = []
+    routed: list[tuple[Thesis, str, tuple[str, list[str]]]] = []
+    combined_signals: list[tuple[str, list[str]]] = []
     failed = 0
 
     for thesis in theses:
@@ -180,10 +206,12 @@ def run_every_domain(args: argparse.Namespace) -> int:
             continue
 
         digest = getattr(one, "_digest", "")
+        signals = getattr(one, "_signals", (thesis.domain, []))
 
         if digest and thesis.email_to:
-            routed.append((thesis, digest))
+            routed.append((thesis, digest, signals))
         elif digest:
+            combined_signals.append(signals)
             # Ordered by what was found, so a morning with something in it does
             # not open with four quiet domains.
             found = digest.count("\n1. ")
@@ -191,17 +219,19 @@ def run_every_domain(args: argparse.Namespace) -> int:
 
     undelivered = 0
 
-    for thesis, digest in routed:
+    for thesis, digest, _ in routed:
         print(f"— {thesis.domain}: its own email, not in the combined one —", file=sys.stderr)
         print(digest, file=sys.stderr)
 
     if args.send:
-        for thesis, digest in routed:
+        for thesis, digest, signals in routed:
             subject = digest.splitlines()[0] if digest else f"Deal Radar · {thesis.domain}"
             sent, message = deliver_for(thesis, digest, subject, args.slack)
             print(f"{thesis.domain}: {message}", file=sys.stderr)
 
-            if not sent:
+            if sent:
+                record_signals_sent(args, [signals])
+            else:
                 undelivered += 1
 
     if not sections:
@@ -221,6 +251,8 @@ def run_every_domain(args: argparse.Namespace) -> int:
 
         if not sent:
             return 1
+
+        record_signals_sent(args, combined_signals)
 
     if undelivered:
         return 1
@@ -356,6 +388,10 @@ def command_archive(args: argparse.Namespace) -> int:
     with closing(connect(Path(args.db) if args.db else None)) as connection:
         run = archive_range(connection, start, end)
 
+        # Later filings from companies already judged, compared with what they
+        # filed before. Free, and it has to follow the archive it reads from.
+        signals = detect(connection, start)
+
     for day in run.days:
         state = "complete" if day.complete else f"INCOMPLETE ({len(day.problems)} problems)"
         print(f"{day.day}  {day.filings:4} filings  {state}")
@@ -364,6 +400,8 @@ def command_archive(args: argparse.Namespace) -> int:
             print(f"    {problem}")
 
     print(f"{run.filings} filings stored across {len(run.days)} days")
+    strong = sum(1 for signal in signals if signal.strong)
+    print(f"{len(signals)} new signals from companies already judged ({strong} strong)")
 
     return 1 if run.incomplete else 0
 
